@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SI-BIS PRO — Buku Induk Siswa</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --sidebar-bg:#1e3a8a; --menu-active:#2563eb; --menu-hover:#3b82f6; --content-bg:#f1f5f9;
+  }
+  html,body{font-family:'Segoe UI',system-ui,sans-serif;}
+  .sidebar-bg{background:var(--sidebar-bg);}
+  .menu-item{transition:background .15s; cursor:pointer;}
+  .menu-item:hover{background:var(--menu-hover);}
+  .menu-item.active{background:var(--menu-active); box-shadow:inset 3px 0 0 #fff;}
+  .content-bg{background:var(--content-bg);}
+  .logo-box{background:#fff; padding:4px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center;}
+  .logo-box img{max-height:44px; max-width:44px; object-fit:contain;}
+  .thumb{width:40px;height:40px;border-radius:50%;object-fit:cover;display:inline-block;}
+  .avatar{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:14px;}
+  .no-print{}
+  @media print{
+    body{background:#fff!important;color:#000!important;font-size:12pt;}
+    .no-print{display:none!important;}
+    #appShell,#loginScreen{display:none!important;}
+    #printArea{display:block!important;position:absolute;left:0;top:0;width:100%;margin:0;padding:1.5cm;background:#fff!important;box-shadow:none!important;}
+    .page-break{page-break-before:always;}
+    table{width:100%!important;border-collapse:collapse!important;background:#fff!important;}
+    th,td{border:1px solid #000!important;padding:6px 10px!important;font-size:10pt!important;background:#fff!important;color:#000!important;}
+    .logo-print{background:#fff!important;padding:4px;display:inline-block;}
+    .logo-print img{max-height:70px;}
+    *{background:transparent!important;}
+    #printArea,#printArea *{background-color:#fff!important;}
+  }
+  #printArea{display:none;}
+  .spin{animation:sp 1s linear infinite;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  ::-webkit-scrollbar{width:8px;height:8px;} ::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:4px;}
+</style>
+</head>
+<body class="content-bg">
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen" class="min-h-screen flex items-center justify-center p-4" style="background:linear-gradient(135deg,var(--sidebar-bg),#0f172a);">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+    <div class="flex flex-col items-center mb-6">
+      <div class="logo-box shadow-md mb-3" id="loginLogoBox"><span class="text-3xl text-slate-400"><i class="fa-solid fa-school"></i></span></div>
+      <h1 class="text-2xl font-bold text-slate-800" id="loginAppName">SI-BIS PRO</h1>
+      <p class="text-sm text-slate-500 mt-1" id="loginSchoolName">Memuat profil sekolah…</p>
+      <p class="text-xs text-slate-400 mt-1">Sistem Informasi Buku Induk Siswa</p>
+    </div>
+    <div id="loginAlert" class="hidden mb-3 px-3 py-2 rounded text-sm bg-red-50 text-red-700 border border-red-200"></div>
+    <div id="gasHint" class="hidden mb-3 px-3 py-2 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200"></div>
+    <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+    <input id="loginUser" type="text" autocomplete="username" class="w-full mb-3 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="admin">
+    <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+    <input id="loginPass" type="password" autocomplete="current-password" class="w-full mb-4 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••">
+    <button onclick="doLogin()" class="w-full py-2.5 rounded-lg text-white font-semibold hover:opacity-90 transition" style="background:var(--menu-active);"><i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk</button>
+    <button onclick="doLoginDemo()" class="w-full mt-2 py-2 rounded-lg border-2 border-dashed border-slate-300 text-slate-500 font-medium hover:bg-slate-50 text-sm"><i class="fa-solid fa-flask mr-2"></i>Mode Demo — coba tanpa backend</button>
+    <p class="text-xs text-center text-slate-400 mt-4">Default: <b>admin</b> / <b>admin123</b> — segera ganti password.<br>Mode Demo menyimpan data hanya di browser ini (tanpa upload foto).</p>
+  </div>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="appShell" class="hidden flex min-h-screen">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar-bg text-white w-64 flex-shrink-0 flex flex-col no-print">
+    <div class="p-4 flex items-center gap-3 border-b border-white/10">
+      <div class="logo-box" id="sideLogoBox"><span class="text-xl text-slate-400"><i class="fa-solid fa-school"></i></span></div>
+      <div class="min-w-0">
+        <div class="font-bold text-sm truncate" id="sideAppName">SI-BIS PRO</div>
+        <div class="text-[11px] text-white/70 truncate" id="sideSchoolName">—</div>
+      </div>
+    </div>
+    <nav id="sideMenu" class="flex-1 py-2 overflow-y-auto text-sm"></nav>
+    <div class="p-3 border-t border-white/10 text-[11px] text-white/60">
+      <div id="sideUser">—</div>
+      <div>v3.1 · Google Sheets Backend</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <header class="bg-white shadow-sm px-5 py-3 flex items-center gap-3 flex-wrap no-print">
+      <button onclick="toggleSidebar()" class="lg:hidden text-slate-600"><i class="fa-solid fa-bars text-lg"></i></button>
+      <div class="flex-1 min-w-[180px]">
+        <div class="font-bold text-slate-800" id="pageTitle">Dashboard</div>
+      </div>
+      <div class="flex items-center gap-2 text-sm">
+        <label class="text-slate-500 text-xs">TA</label>
+        <select id="filterTA" onchange="changeFilter()" class="border border-slate-300 rounded px-2 py-1 text-sm"></select>
+        <label class="text-slate-500 text-xs">Semester</label>
+        <select id="filterSem" onchange="changeFilter()" class="border border-slate-300 rounded px-2 py-1 text-sm"></select>
+        <span id="syncIndicator" class="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600"><i class="fa-solid fa-cloud"></i> Siap</span>
+        <button onclick="doLogout()" class="px-3 py-1.5 rounded bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold"><i class="fa-solid fa-right-from-bracket mr-1"></i>Keluar</button>
+      </div>
+    </header>
+    <main id="content" class="flex-1 p-5 overflow-x-auto"></main>
+  </div>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div id="modalOverlay" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 no-print" onclick="if(event.target===this)closeModal()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-between px-5 py-3 border-b">
+      <h3 id="modalTitle" class="font-bold text-slate-800">—</h3>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="modalBody" class="p-5 overflow-y-auto"></div>
+    <div id="modalFooter" class="px-5 py-3 border-t flex justify-end gap-2"></div>
+  </div>
+</div>
+
+<!-- ============ PRINT AREA ============ -->
+<div id="printArea"></div>
+
+<script>
+/* ============================================================
+   SI-BIS PRO — Sistem Informasi Buku Induk Siswa (single-file)
+   Backend: Google Apps Script + Sheets + Drive (lihat Code.gs)
+   ============================================================ */
+// >>> GANTI DEPLOYMENT_ID dengan Web app URL hasil deploy Apps Script <<<
+const GAS_URL = "https://script.google.com/macros/s/AKfycbz6yCbVj7S-4AEJ0DrROI_rJbRplp3UllkVv9ghCFuTUCTSPCyWUOjGH5QKa22Qoc9J6Q/exec";
+const LS_KEY = "sibis_pro_cache_v3";
+
+/* ---------- State ---------- */
+let studentDb=[], guruDb=[], kelasDb=[], mapelDb=[], gradeDb={}, usersDb=[];
+let parameterDb={
+  tahunAjaran:["2025/2026","2026/2027"], semester:["Ganjil","Genap"],
+  driveFolderId:"",
+  sekolah:{namaAplikasi:"SI-BIS PRO", logo:"", namaSekolah:"SMP Negeri 1 Contoh", npsn:"", alamat:"", kepalaSekolah:"", nipKepalaSekolah:""},
+  theme:{sidebarBg:"#1e3a8a", menuActive:"#2563eb", menuHover:"#3b82f6", contentBg:"#f1f5f9"}
+};
+let currentUser=null, activeFilters={tahunAjaran:"2026/2027", semester:"Ganjil"};
+let currentPage="dashboard";
+let saveTimer=null, offline=false, demoMode=false;
+
+const SISWA_COLS=['id','nama','nis','nisn','nik','jk','agama','statusKel','anakKe','tempatLahir','tglLahir','alamat','noHp','sekolahAsal','kelasDiterima','kelasAktifId','tglDiterima','namaAyah','pekerjaanAyah','namaIbu','pekerjaanIbu','alamatOrtu','namaWali','pekerjaanWali','alamatWali','foto','tahunAjaran','statusAkhir','tglKeluar','alasanKeluar'];
+const GURU_COLS=['id','nip','nik','nama','jk','alamat','noHp','mapelDiampu','status','foto'];
+const AGAMA=["Islam","Kristen","Katolik","Hindu","Buddha","Konghucu","Kepercayaan"];
+const DEFAULT_MAPEL_SMP=[
+  {kode:"pai",nama:"Pendidikan Agama Islam",kelompok:"A",tingkat:"Semua"},
+  {kode:"ppkn",nama:"Pendidikan Pancasila dan Kewarganegaraan",kelompok:"A",tingkat:"Semua"},
+  {kode:"bind",nama:"Bahasa Indonesia",kelompok:"A",tingkat:"Semua"},
+  {kode:"big",nama:"Bahasa Inggris",kelompok:"A",tingkat:"Semua"},
+  {kode:"mtk",nama:"Matematika",kelompok:"A",tingkat:"Semua"},
+  {kode:"ipa",nama:"Ilmu Pengetahuan Alam",kelompok:"A",tingkat:"Semua"},
+  {kode:"ips",nama:"Ilmu Pengetahuan Sosial",kelompok:"A",tingkat:"Semua"},
+  {kode:"sbk",nama:"Seni Budaya",kelompok:"B",tingkat:"Semua"},
+  {kode:"pjok",nama:"Pendidikan Jasmani, Olahraga & Kesehatan",kelompok:"B",tingkat:"Semua"},
+  {kode:"prak",nama:"Prakarya",kelompok:"B",tingkat:"Semua"},
+  {kode:"tik",nama:"Informatika",kelompok:"C",tingkat:"Semua"}
+];
+
+/* ---------- Util ---------- */
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const uid=p=>p+"-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function avatarColor(name){const pal=["#0ea5e9","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316"];let h=0;for(const c of String(name||"?"))h=(h*31+c.charCodeAt(0))>>>0;return pal[h%pal.length];}
+function initials(n){const p=String(n||"?").trim().split(/\s+/);return (p[0][0]||"?")+(p[1]?p[1][0]:"").toUpperCase();}
+function fotoCell(foto,nama,size){
+  if(foto&&String(foto).startsWith("http")) return `<img src="${esc(foto)}=w${size||80}-h${size||80}-c" class="thumb" style="width:${size||40}px;height:${size||40}px" onerror="this.outerHTML='<span class=avatar style=background:${avatarColor(nama)}>${initials(nama)}</span>'">`;
+  return `<span class="avatar" style="background:${avatarColor(nama)};width:${size||40}px;height:${size||40}px">${initials(nama)}</span>`;
+}
+const bulan=["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+function tglID(s){if(!s)return "-";const d=new Date(s);if(isNaN(d))return s;return d.getDate()+" "+bulan[d.getMonth()]+" "+d.getFullYear();}
+function kelasAktifSiswa(s){const k=kelasDb.find(x=>x.id===s.kelasAktifId);return k?k.namaKelas:"<span class='text-slate-400 italic'>Belum Ditempatkan</span>";}
+
+/* ---------- GAS communication ---------- */
+async function gas(action, data={}){
+  if(demoMode){
+    if(action==="login") return {ok:true, token:"demo-token", user:{username:"admin", nama:"Administrator (Mode Demo)", role:"Admin"}};
+    if(action==="loadData") return {ok:false, offline:true, demo:true};
+    if(action==="uploadPhoto") return {ok:false, error:"Upload foto membutuhkan backend (Google Apps Script).", demo:true};
+    return {ok:true, demo:true};
+  }
+  try{
+    const res=await fetch(GAS_URL,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action,...(currentUser?{token:currentUser.token}:{}),...data})});
+    const j=await res.json();
+    if(j.relogin){doLogout(true); throw new Error(j.error||"Sesi berakhir");}
+    offline=false; return j;
+  }catch(e){
+    offline=true; setSync("Offline — data tersimpan lokal","bg-amber-100 text-amber-700");
+    return {ok:false, error:String(e.message||e), offline:true};
+  }
+}
+function setSync(txt,cls){const el=$("syncIndicator");if(!el)return;el.className="text-xs px-2 py-1 rounded "+(cls||"bg-slate-100 text-slate-600");el.innerHTML=txt;}
+function scheduleSave(){
+  setSync('<i class="fa-solid fa-cloud-arrow-up spin"></i> Menyinkronkan…',"bg-blue-100 text-blue-700");
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveAll,1500);
+}
+async function saveAll(){
+  localStorage.setItem(LS_KEY,JSON.stringify({studentDb,guruDb,kelasDb,mapelDb,gradeDb,usersDb,parameterDb,activeFilters}));
+  if(demoMode){ setSync('<i class="fa-solid fa-flask text-amber-600"></i> Mode Demo — tersimpan lokal',"bg-amber-100 text-amber-700"); usersDb.forEach(u=>delete u.password); return; }
+  const r=await gas("saveData",{siswa:studentDb,guru:guruDb,kelas:kelasDb,mapel:mapelDb,nilai:gradeDb,parameter:parameterDb,users:usersDb});
+  usersDb.forEach(u=>delete u.password); // jangan simpan plaintext di memori/cache
+  if(r.ok) setSync('<i class="fa-solid fa-circle-check text-green-600"></i> Tersimpan',"bg-green-100 text-green-700");
+  else if(!r.offline) setSync('<i class="fa-solid fa-triangle-exclamation text-red-600"></i> Gagal sinkron',"bg-red-100 text-red-700");
+}
+
+/* ---------- Theme ---------- */
+function applyTheme(t){
+  t=t||parameterDb.theme||{};
+  const r=document.documentElement.style;
+  r.setProperty("--sidebar-bg",t.sidebarBg||"#1e3a8a");
+  r.setProperty("--menu-active",t.menuActive||"#2563eb");
+  r.setProperty("--menu-hover",t.menuHover||"#3b82f6");
+  r.setProperty("--content-bg",t.contentBg||"#f1f5f9");
+}
+function applyIdentitas(){
+  const sk=parameterDb.sekolah||{};
+  document.title=(sk.namaAplikasi||"SI-BIS PRO")+" — Buku Induk Siswa";
+  $("loginAppName").textContent=sk.namaAplikasi||"SI-BIS PRO";
+  $("loginSchoolName").textContent=sk.namaSekolah||"Belum diatur";
+  $("sideAppName").textContent=sk.namaAplikasi||"SI-BIS PRO";
+  $("sideSchoolName").textContent=sk.namaSekolah||"";
+  const logo=sk.logo||"";
+  [["loginLogoBox",60],["sideLogoBox",44]].forEach(([id,h])=>{
+    const box=$(id); if(!box)return;
+    if(logo&&logo.startsWith("http")) box.innerHTML=`<img src="${esc(logo)}=w120-h120-c" style="max-height:${h}px;max-width:${h}px;object-fit:contain" alt="logo">`;
+    else box.innerHTML=`<span class="text-xl text-slate-400"><i class="fa-solid fa-school"></i></span>`;
+  });
+}
+
+/* ---------- Auth ---------- */
+async function loadPublicProfile(){
+  const r=await gas("getPublicProfile");
+  if(r.ok!==false&&r.namaAplikasi){ parameterDb.sekolah.namaAplikasi=r.namaAplikasi; if(r.logo)parameterDb.sekolah.logo=r.logo; if(r.namaSekolah)parameterDb.sekolah.namaSekolah=r.namaSekolah; }
+  applyIdentitas();
+}
+async function doLogin(){
+  const u=$("loginUser").value.trim(), p=$("loginPass").value;
+  const al=$("loginAlert");
+  if(!u||!p){al.classList.remove("hidden");al.textContent="Username & password wajib diisi.";return;}
+  al.classList.add("hidden");
+  const r=await gas("login",{username:u,password:p});
+  if(r.ok){
+    currentUser={token:r.token,username:r.user.username,nama:r.user.nama,role:r.user.role};
+    sessionStorage.setItem("sibis_session",JSON.stringify(currentUser));
+    await afterLogin();
+  }else{
+    al.classList.remove("hidden");
+    al.innerHTML = r.offline
+      ? '<b>Backend belum terhubung.</b> Pastikan konstanta <code>GAS_URL</code> sudah diganti dengan URL hasil deploy Apps Script (lihat PANDUAN-DEPLOY). Atau klik <b>Mode Demo</b> untuk mencoba tanpa backend.'
+      : (r.error||"Login gagal. Periksa username & password.");
+  }
+}
+function doLoginDemo(){
+  demoMode=true;
+  currentUser={token:"demo-token", username:"admin", nama:"Administrator (Mode Demo)", role:"Admin"};
+  $("loginAlert").classList.add("hidden");
+  afterLogin();
+}
+function doLogout(silent){
+  sessionStorage.removeItem("sibis_session");
+  currentUser=null;
+  $("appShell").classList.add("hidden");$("appShell").classList.remove("flex");
+  $("loginScreen").classList.remove("hidden");
+  if(!silent){$("loginUser").value="";$("loginPass").value="";}
+}
+async function afterLogin(){
+  $("loginScreen").classList.add("hidden");
+  $("appShell").classList.remove("hidden");$("appShell").classList.add("flex");
+  $("sideUser").innerHTML=`<i class="fa-solid fa-user-circle mr-1"></i>${esc(currentUser.nama)} <span class="text-white/50">(${esc(currentUser.role)})</span>`;
+  const r=await gas("loadData");
+  if(r.ok!==false&&r.siswa!==undefined){ applyData(r); }
+  else{ // fallback cache / default
+    const cache=JSON.parse(localStorage.getItem(LS_KEY)||"null");
+    if(cache) applyData(cache); else { if(!mapelDb.length) mapelDb=DEFAULT_MAPEL_SMP.map(m=>({id:uid("mpl"),...m,aktif:true})); }
+  }
+  if(!mapelDb.length) mapelDb=DEFAULT_MAPEL_SMP.map(m=>({id:uid("mpl"),...m,aktif:true}));
+  if(!parameterDb.tahunAjaran.length) parameterDb.tahunAjaran=["2025/2026","2026/2027"];
+  if(!activeFilters.tahunAjaran||!parameterDb.tahunAjaran.includes(activeFilters.tahunAjaran)) activeFilters.tahunAjaran=parameterDb.tahunAjaran[parameterDb.tahunAjaran.length-1];
+  renderMenu(); renderFilters(); showPage("dashboard"); if(demoMode) setSync('<i class="fa-solid fa-flask text-amber-600"></i> Mode Demo (data lokal)',"bg-amber-100 text-amber-700");
+  // Peringatan password default
+  if(currentUser.username==="admin") setTimeout(()=>{
+    if(confirm("Anda login sebagai admin default. Disarankan segera mengganti password di menu Pengaturan → User. Buka sekarang?")) showPage("pengaturan",{tab:"user"});
+  },600);
+}
+function applyData(d){
+  if(d.siswa)studentDb=d.siswa; if(d.guru)guruDb=d.guru; if(d.kelas)kelasDb=d.kelas;
+  if(d.mapel)mapelDb=d.mapel; if(d.nilai)gradeDb=d.nilai||{}; if(d.users)usersDb=d.users;
+  if(d.parameter){
+    const p=d.parameter;
+    if(p.tahunAjaran&&p.tahunAjaran.length)parameterDb.tahunAjaran=p.tahunAjaran;
+    if(p.semester&&p.semester.length)parameterDb.semester=p.semester;
+    if(p.driveFolderId)parameterDb.driveFolderId=p.driveFolderId;
+    if(p.sekolah)parameterDb.sekolah=Object.assign(parameterDb.sekolah,p.sekolah);
+    if(p.theme)parameterDb.theme=Object.assign(parameterDb.theme,p.theme);
+  }
+  applyTheme(parameterDb.theme); applyIdentitas();
+}
+function renderFilters(){
+  const ta=$("filterTA"),sm=$("filterSem");
+  ta.innerHTML=parameterDb.tahunAjaran.map(t=>`<option ${t===activeFilters.tahunAjaran?"selected":""}>${esc(t)}</option>`).join("");
+  sm.innerHTML=(parameterDb.semester||["Ganjil","Genap"]).map(s=>`<option ${s===activeFilters.semester?"selected":""}>${esc(s)}</option>`).join("");
+}
+function changeFilter(){activeFilters.tahunAjaran=$("filterTA").value;activeFilters.semester=$("filterSem").value;scheduleSave();showPage(currentPage);}
+
+/* ---------- Menu ---------- */
+const MENUS=[
+  {id:"dashboard",label:"Dashboard",icon:"fa-gauge-high",role:["Admin","Operator"]},
+  {id:"cover",label:"Cover Cetak",icon:"fa-book",role:["Admin","Operator"]},
+  {id:"pemeriksaan",label:"Pemeriksaan",icon:"fa-clipboard-check",role:["Admin","Operator"]},
+  {id:"siswa",label:"Data Siswa",icon:"fa-users",role:["Admin","Operator"]},
+  {id:"guru",label:"Data Guru",icon:"fa-chalkboard-user",role:["Admin","Operator"]},
+  {id:"kelas",label:"Kelas",icon:"fa-door-open",role:["Admin","Operator"]},
+  {id:"mapel",label:"Mata Pelajaran",icon:"fa-book-open",role:["Admin","Operator"]},
+  {id:"nilai",label:"Nilai Rapor",icon:"fa-scroll",role:["Admin","Operator"]},
+  {id:"pengaturan",label:"Pengaturan",icon:"fa-gear",role:["Admin"]}
+];
+function renderMenu(){
+  $("sideMenu").innerHTML=MENUS.filter(m=>m.role.includes(currentUser.role)).map(m=>
+    `<div class="menu-item px-4 py-2.5 flex items-center gap-3 ${m.id===currentPage?'active':''}" onclick="showPage('${m.id}')">
+       <i class="fa-solid ${m.icon} w-5 text-center"></i><span>${m.label}</span></div>`).join("");
+}
+function toggleSidebar(){$("sidebar").classList.toggle("hidden");}
+function showPage(id,opts){
+  currentPage=id; renderMenu();
+  const titles={dashboard:"Dashboard",cover:"Cover Cetak",pemeriksaan:"Berita Acara Pemeriksaan",siswa:"Data Siswa",guru:"Data Guru",kelas:"Kelas & Wali Kelas",mapel:"Mata Pelajaran",nilai:"Nilai Rapor",pengaturan:"Pengaturan"};
+  $("pageTitle").textContent=titles[id]||id;
+  const fn={dashboard:renderDashboard,cover:renderCover,pemeriksaan:renderPemeriksaan,siswa:renderSiswa,guru:renderGuru,kelas:renderKelas,mapel:renderMapel,nilai:renderNilai,pengaturan:renderPengaturan}[id];
+  if(fn) fn(opts||{});
+}
+
+/* ---------- Modal ---------- */
+function openModal(title,bodyHtml,footerHtml){$("modalTitle").textContent=title;$("modalBody").innerHTML=bodyHtml;$("modalFooter").innerHTML=footerHtml||`<button onclick="closeModal()" class="px-4 py-2 rounded bg-slate-200 hover:bg-slate-300 text-sm">Tutup</button>`;$("modalOverlay").classList.remove("hidden");}
+function closeModal(){$("modalOverlay").classList.add("hidden");}
+
+/* ---------- Foto upload (kompres → Drive) ---------- */
+async function handleFotoInput(inputEl,tipe,cb,maxMB){
+  const f=inputEl.files[0]; if(!f)return;
+  if(demoMode){alert("Upload foto membutuhkan backend Google Apps Script yang sudah di-deploy. Mode Demo hanya untuk mencoba fitur non-foto.");inputEl.value="";return;}
+  const limit=(maxMB||2)*1024*1024;
+  if(f.size>limit){ alert("File terlalu besar ("+(f.size/1048576).toFixed(1)+" MB). Maks "+(maxMB||2)+" MB. Akan dikompresi otomatis."); }
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const maxpx=tipe==="logo"?300:800;
+      let w=img.width,h=img.height;
+      if(w>maxpx||h>maxpx){const s=Math.min(maxpx/w,maxpx/h);w=Math.round(w*s);h=Math.round(h*s);}
+      const c=document.createElement("canvas");c.width=w;c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);
+      const b64=c.toDataURL("image/jpeg",0.8);
+      gas("uploadPhoto",{tipe,namaFile:tipe+"_"+Date.now()+".jpg",base64:b64}).then(r=>{
+        if(r.ok){cb(r.url);}
+        else alert("Upload gagal: "+(r.offline?"Periksa koneksi / URL GAS.":r.error));
+      });
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(f);
+}
+
+/* ============================================================
+   PAGES
+   ============================================================ */
+function renderDashboard(){
+  const siswaTA=studentDb.filter(s=>(s.tahunAjaran||activeFilters.tahunAjaran)===activeFilters.tahunAjaran);
+  const l=siswaTA.filter(s=>s.jk==="L").length, p=siswaTA.filter(s=>s.jk==="P").length;
+  const kelasTA=kelasDb.filter(k=>k.tahunAjaran===activeFilters.tahunAjaran);
+  const guruAktif=guruDb.filter(g=>(g.status||"Aktif")==="Aktif").length;
+  const perKelas=kelasTA.map(k=>{const j=siswaTA.filter(s=>s.kelasAktifId===k.id).length;return {k,j};}).sort((a,b)=>a.k.namaKelas.localeCompare(b.k.namaKelas));
+  const card=(icon,label,val,color)=>`<div class="bg-white rounded-xl shadow p-5 flex items-center gap-4">
+    <div class="w-12 h-12 rounded-lg flex items-center justify-center text-white text-xl" style="background:${color}"><i class="fa-solid ${icon}"></i></div>
+    <div><div class="text-2xl font-bold text-slate-800">${val}</div><div class="text-xs text-slate-500">${label}</div></div></div>`;
+  $("content").innerHTML=`
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      ${card("fa-users","Total Siswa",siswaTA.length,"#2563eb")}
+      ${card("fa-mars","Laki-laki",l,"#0ea5e9")}
+      ${card("fa-venus","Perempuan",p,"#ec4899")}
+      ${card("fa-chalkboard-user","Guru Aktif",guruAktif,"#10b981")}
+    </div>
+    <div class="grid lg:grid-cols-2 gap-5">
+      <div class="bg-white rounded-xl shadow p-5">
+        <h3 class="font-bold text-slate-800 mb-3"><i class="fa-solid fa-door-open text-blue-600 mr-2"></i>Siswa per Kelas (${activeFilters.tahunAjaran})</h3>
+        <table class="w-full text-sm"><thead><tr class="text-left text-slate-500 border-b"><th class="py-2">Kelas</th><th>Wali</th><th class="text-center">Jumlah</th><th class="text-center">L</th><th class="text-center">P</th></tr></thead><tbody>
+        ${perKelas.map(({k,j})=>{const w=guruDb.find(g=>g.id===k.waliKelasId);const sl=siswaTA.filter(s=>s.kelasAktifId===k.id&&s.jk==="L").length;return `<tr class="border-b"><td class="py-2 font-medium">${esc(k.namaKelas)}</td><td>${esc(w?w.nama:"-")}</td><td class="text-center font-bold">${j}</td><td class="text-center">${sl}</td><td class="text-center">${j-sl}</td></tr>`;}).join("")||"<tr><td colspan='5' class='py-4 text-center text-slate-400 italic'>Belum ada kelas</td></tr>"}
+        </tbody></table>
+      </div>
+      <div class="bg-white rounded-xl shadow p-5">
+        <h3 class="font-bold text-slate-800 mb-3"><i class="fa-solid fa-circle-info text-amber-500 mr-2"></i>Informasi</h3>
+        <div class="text-sm space-y-2 text-slate-600">
+          <div><b>Sekolah:</b> ${esc(parameterDb.sekolah.namaSekolah||"-")}</div>
+          <div><b>Tahun Ajaran Aktif:</b> ${esc(activeFilters.tahunAjaran)} — ${esc(activeFilters.semester)}</div>
+          <div><b>Jumlah Kelas:</b> ${kelasTA.length}</div>
+          <div><b>Mapel Aktif:</b> ${mapelDb.filter(m=>m.aktif).length}</div>
+          <div><b>User terdaftar:</b> ${usersDb.length}</div>
+          <div><b>Folder Drive foto:</b> ${parameterDb.driveFolderId?'<span class="text-green-600"><i class="fa-solid fa-check"></i> Terhubung</span>':'<span class="text-amber-600">Belum (dibuat otomatis saat upload pertama)</span>'}</div>
+        </div>
+        <div class="mt-4 pt-4 border-t text-xs text-slate-400">Urutan input disarankan: Pengaturan → Mapel → Guru → Kelas → Siswa → Nilai.</div>
+      </div>
+    </div>`;
+}
+
+/* ---------- Cover & Pemeriksaan (cetak) ---------- */
+function kopCetak(){
+  const sk=parameterDb.sekolah||{};
+  return `<div style="display:flex;align-items:center;gap:15px;border-bottom:3px double #000;padding-bottom:10px;margin-bottom:15px;">
+    <div class="logo-print">${sk.logo?`<img src="${esc(sk.logo)}=w140-h140-c">`:`<div style="width:70px;height:70px;border:1px solid #000;display:flex;align-items:center;justify-content:center;font-weight:bold">LOGO</div>`}</div>
+    <div style="flex:1;text-align:center;">
+      <div style="font-size:16pt;font-weight:bold;text-transform:uppercase">${esc(sk.namaSekolah||"Nama Sekolah")}</div>
+      ${sk.npsn?`<div style="font-size:10pt">NPSN: ${esc(sk.npsn)}</div>`:""}
+      <div style="font-size:10pt">${esc(sk.alamat||"Alamat sekolah")}</div>
+    </div></div>`;
+}
+function renderCover(){
+  $("content").innerHTML=`<div class="bg-white rounded-xl shadow p-5">
+    <h3 class="font-bold text-slate-800 mb-3"><i class="fa-solid fa-book text-blue-600 mr-2"></i>Sampul / Cover Buku Induk</h3>
+    <p class="text-sm text-slate-500 mb-4">Cetak sampul untuk buku induk siswa tahun ajaran ${esc(activeFilters.tahunAjaran)}.</p>
+    <button onclick="printCover()" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-print mr-2"></i>Cetak / Download PDF</button>
+  </div>`;
+}
+function printCover(){
+  const sk=parameterDb.sekolah||{};
+  $("printArea").innerHTML=`<div style="text-align:center;padding-top:120px;">
+    <div class="logo-print" style="margin:0 auto 30px;width:120px;height:120px;display:flex;align-items:center;justify-content:center;border:1px solid #ccc">${sk.logo?`<img src="${esc(sk.logo)}=w240-h240-c" style="max-width:110px;max-height:110px">`:`<span style="font-size:40px;color:#999">LOGO</span>`}</div>
+    <div style="font-size:14pt;letter-spacing:2px">${esc(sk.namaAplikasi||"SI-BIS PRO")}</div>
+    <div style="font-size:24pt;font-weight:bold;margin:20px 0;letter-spacing:3px">BUKU INDUK<br>SISWA</div>
+    <div style="font-size:16pt;font-weight:bold">${esc(sk.namaSekolah||"Nama Sekolah")}</div>
+    ${sk.npsn?`<div style="font-size:11pt;margin-top:5px">NPSN: ${esc(sk.npsn)}</div>`:""}
+    <div style="font-size:11pt;margin-top:5px">${esc(sk.alamat||"")}</div>
+    <div style="margin-top:60px;font-size:13pt">Tahun Pelajaran ${esc(activeFilters.tahunAjaran)}</div>
+    <div style="margin-top:80px;font-size:11pt">Kepala Sekolah<br><br><br><u>${esc(sk.kepalaSekolah||"____________________")}</u><br>NIP. ${esc(sk.nipKepalaSekolah||"—")}</div>
+  </div>`;
+  setTimeout(()=>window.print(),300);
+}
+function renderPemeriksaan(){
+  $("content").innerHTML=`<div class="bg-white rounded-xl shadow p-5">
+    <h3 class="font-bold text-slate-800 mb-3"><i class="fa-solid fa-clipboard-check text-blue-600 mr-2"></i>Berita Acara Pemeriksaan Buku Induk</h3>
+    <div class="grid grid-cols-2 gap-3 mb-4 max-w-lg">
+      <div><label class="text-xs text-slate-500">Tanggal Pemeriksaan</label><input id="baTgl" type="date" class="w-full border rounded px-2 py-1.5 text-sm" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div><label class="text-xs text-slate-500">Nama Pemeriksa</label><input id="baPemeriksa" type="text" class="w-full border rounded px-2 py-1.5 text-sm" placeholder="Nama pengawas / pemeriksa"></div>
+    </div>
+    <button onclick="printPemeriksaan()" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-print mr-2"></i>Cetak / Download PDF</button>
+  </div>`;
+}
+function printPemeriksaan(){
+  const tgl=$("baTgl").value, pm=$("baPemeriksa").value||"____________________";
+  const sk=parameterDb.sekolah||{};
+  $("printArea").innerHTML=`${kopCetak()}
+    <h2 style="text-align:center;font-size:14pt;font-weight:bold;text-decoration:underline">BERITA ACARA PEMERIKSAAN BUKU INDUK SISWA</h2>
+    <p style="text-align:center;font-size:10pt;margin-bottom:20px">Nomor: …/BIS/${(activeFilters.tahunAjaran||"").replace("/","/")||"—"}</p>
+    <p style="font-size:11pt;line-height:1.8">Pada hari ini, ${tglID(tgl)}, telah dilakukan pemeriksaan Buku Induk Siswa pada ${esc(sk.namaSekolah||"sekolah")} Tahun Ajaran ${esc(activeFilters.tahunAjaran)} Semester ${esc(activeFilters.semester)} oleh:</p>
+    <table style="margin:15px 0"><tr><td style="border:none!important;padding:2px 10px 2px 0">Nama Pemeriksa</td><td style="border:none!important;padding:2px 10px">:</td><td style="border:none!important;padding:2px 10px">${esc(pm)}</td></tr>
+    <tr><td style="border:none!important;padding:2px 10px 2px 0">Jabatan</td><td style="border:none!important;padding:2px 10px">:</td><td style="border:none!important;padding:2px 10px">Pengawas Sekolah</td></tr></table>
+    <p style="font-size:11pt;line-height:1.8">Adapun hasil pemeriksaan dicatat dalam tabel berikut:</p>
+    <table><thead><tr><th>No</th><th>Aspek yang Diperiksa</th><th>Keterangan</th><th>Tindak Lanjut</th></tr></thead><tbody>
+    ${[1,2,3,4,5].map(i=>`<tr><td style="text-align:center">${i}</td><td>${["Kelengkapan biodata siswa","Kesesuaian data dengan dokumen asli","Foto siswa","Buku induk kelas / wali kelas","Catatan mutasi & kelulusan"][i-1]}</td><td> </td><td> </td></tr>`).join("")}
+    </tbody></table>
+    <p style="margin-top:25px;font-size:11pt;line-height:1.8">Demikian berita acara ini dibuat dengan sebenarnya untuk dipergunakan sebagaimana mestinya.</p>
+    <table style="margin-top:40px;width:100%"><tr>
+      <td style="border:none!important;text-align:center">Mengetahui,<br>Kepala Sekolah<br><br><br><u>${esc(sk.kepalaSekolah||"____________________")}</u><br>NIP. ${esc(sk.nipKepalaSekolah||"—")}</td>
+      <td style="border:none!important;text-align:center">Pemeriksa<br><br><br><u>${esc(pm)}</u></td>
+    </tr></table>`;
+  setTimeout(()=>window.print(),300);
+}
+
+/* ---------- DATA SISWA ---------- */
+let siswaFilter={kelas:"",cari:""};
+function renderSiswa(){
+  const kelasTA=kelasDb.filter(k=>k.tahunAjaran===activeFilters.tahunAjaran);
+  let list=studentDb.filter(s=>(s.tahunAjaran||activeFilters.tahunAjaran)===activeFilters.tahunAjaran);
+  if(siswaFilter.kelas==="__none__") list=list.filter(s=>!s.kelasAktifId);
+  else if(siswaFilter.kelas) list=list.filter(s=>s.kelasAktifId===siswaFilter.kelas);
+  if(siswaFilter.cari) list=list.filter(s=>String(s.nama||"").toLowerCase().includes(siswaFilter.cari.toLowerCase()));
+  $("content").innerHTML=`
+    <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-2 items-center no-print">
+      <button onclick="formSiswa()" class="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-plus mr-1"></i>Tambah Siswa</button>
+      <button onclick="downloadTemplate('siswa')" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700"><i class="fa-solid fa-download mr-1"></i>Template Import</button>
+      <button onclick="document.getElementById('importSiswa').click()" class="px-3 py-2 rounded bg-amber-500 text-white text-sm hover:bg-amber-600"><i class="fa-solid fa-file-import mr-1"></i>Import CSV/Excel</button>
+      <input type="file" id="importSiswa" class="hidden" accept=".csv,.xlsx,.xls" onchange="importData(this,'siswa')">
+      <div class="flex-1"></div>
+      <select onchange="siswaFilter.kelas=this.value;renderSiswa()" class="border rounded px-2 py-1.5 text-sm">
+        <option value="">Semua Kelas</option><option value="__none__" ${siswaFilter.kelas==="__none__"?"selected":""}>Belum Ditempatkan</option>
+        ${kelasTA.map(k=>`<option value="${k.id}" ${siswaFilter.kelas===k.id?"selected":""}>${esc(k.namaKelas)}</option>`).join("")}
+      </select>
+      <input oninput="siswaFilter.cari=this.value;renderSiswa()" value="${esc(siswaFilter.cari)}" placeholder="Cari nama…" class="border rounded px-3 py-1.5 text-sm w-48">
+    </div>
+    <div class="bg-white rounded-xl shadow overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-100 text-slate-600 text-xs uppercase"><tr>
+          <th class="p-3 text-left">Foto</th><th class="p-3 text-left">NIS</th><th class="p-3 text-left">Nama</th><th class="p-3 text-center">JK</th>
+          <th class="p-3 text-left">Kelas</th><th class="p-3 text-left">NISN</th><th class="p-3 text-center no-print">Aksi</th></tr></thead>
+        <tbody>
+        ${list.map(s=>`<tr class="border-t hover:bg-slate-50">
+          <td class="p-2 pl-3">${fotoCell(s.foto,s.nama,40)}</td>
+          <td class="p-2 font-mono text-xs">${esc(s.nis||"-")}</td>
+          <td class="p-2 font-medium">${esc(s.nama)}</td>
+          <td class="p-2 text-center">${s.jk==="L"?'<span class="px-2 py-0.5 rounded bg-sky-100 text-sky-700 text-xs">L</span>':'<span class="px-2 py-0.5 rounded bg-pink-100 text-pink-700 text-xs">P</span>'}</td>
+          <td class="p-2">${kelasAktifSiswa(s)}</td>
+          <td class="p-2 font-mono text-xs">${esc(s.nisn||"-")}</td>
+          <td class="p-2 text-center no-print whitespace-nowrap">
+            <button onclick="formSiswa('${s.id}')" class="text-blue-600 hover:underline text-xs mr-2" title="Edit"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="printBiodata('${s.id}')" class="text-emerald-600 hover:underline text-xs mr-2" title="Cetak Biodata"><i class="fa-solid fa-print"></i></button>
+            <button onclick="hapusSiswa('${s.id}')" class="text-red-500 hover:underline text-xs" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+          </td></tr>`).join("")||`<tr><td colspan="7" class="p-8 text-center text-slate-400 italic">Belum ada data siswa. Klik "Tambah Siswa" atau "Import CSV/Excel".</td></tr>`}
+        </tbody>
+      </table>
+      <div class="p-3 text-xs text-slate-500 border-t">Menampilkan ${list.length} dari ${studentDb.filter(s=>(s.tahunAjaran||activeFilters.tahunAjaran)===activeFilters.tahunAjaran).length} siswa (TA ${esc(activeFilters.tahunAjaran)}).</div>
+    </div>`;
+}
+function formSiswa(id){
+  const s=id?studentDb.find(x=>x.id===id):{};
+  const kelasTA=kelasDb.filter(k=>k.tahunAjaran===activeFilters.tahunAjaran);
+  const inp=(label,key,type="text",ph="")=>`<div><label class="text-xs text-slate-500">${label}</label><input data-k="${key}" type="${type}" value="${esc(s[key]||"")}" placeholder="${ph}" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>`;
+  const sel=(label,key,opts)=>`<div><label class="text-xs text-slate-500">${label}</label><select data-k="${key}" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5">${opts}</select></div>`;
+  const body=`<div class="grid grid-cols-2 gap-3">
+    <div class="col-span-2 flex items-center gap-3 p-3 bg-slate-50 rounded">
+      <div id="fotoPreviewSiswa">${fotoCell(s.foto,s.nama||"?",64)}</div>
+      <div><label class="text-xs text-slate-500 block mb-1">Foto (maks 2 MB, otomatis dikompres)</label>
+        <input type="file" accept="image/*" onchange="handleFotoInput(this,'siswa',u=>{document.getElementById('tmpFoto').value=u;document.getElementById('fotoPreviewSiswa').innerHTML='<img src=\\''+u+'=w128-h128-c\\' class=thumb style=width:64px;height:64px>'})" class="text-xs"></div>
+      <input type="hidden" id="tmpFoto" value="${esc(s.foto||"")}">
+    </div>
+    ${sel("Jenis Kelamin *","jk",`<option value="">—</option><option value="L" ${s.jk==="L"?"selected":""}>Laki-laki</option><option value="P" ${s.jk==="P"?"selected":""}>Perempuan</option>`)}
+    ${inp("Nama Lengkap *","nama","text","Nama sesuai akta")}
+    ${inp("NIS","nis")}${inp("NISN (10 digit)","nisn")}
+    ${inp("NIK (16 digit)","nik")}${sel("Agama","agama",`<option value="">—</option>`+AGAMA.map(a=>`<option ${s.agama===a?"selected":""}>${a}</option>`).join(""))}
+    ${sel("Status dlm Keluarga","statusKel",`<option value="">—</option><option ${s.statusKel==="Anak Kandung"?"selected":""}>Anak Kandung</option><option ${s.statusKel==="Anak Angkat"?"selected":""}>Anak Angkat</option><option ${s.statusKel==="Anak Tiri"?"selected":""}>Anak Tiri</option>`)}
+    ${inp("Anak Ke-","anakKe","number")}
+    ${inp("Tempat Lahir","tempatLahir")}${inp("Tanggal Lahir","tglLahir","date")}
+    ${inp("Alamat","alamat")}${inp("No HP","noHp")}
+    ${inp("Sekolah Asal","sekolahAsal")}${inp("Kelas Diterima","kelasDiterima")}
+    ${sel("Kelas Aktif","kelasAktifId",`<option value="">Belum Ditempatkan</option>`+kelasTA.map(k=>`<option value="${k.id}" ${s.kelasAktifId===k.id?"selected":""}>${esc(k.namaKelas)}</option>`).join(""))}
+    ${inp("Tanggal Diterima","tglDiterima","date")}
+    <div class="col-span-2 border-t pt-2 mt-1 font-semibold text-slate-700 text-sm">Data Orang Tua / Wali</div>
+    ${inp("Nama Ayah","namaAyah")}${inp("Pekerjaan Ayah","pekerjaanAyah")}
+    ${inp("Nama Ibu","namaIbu")}${inp("Pekerjaan Ibu","pekerjaanIbu")}
+    ${inp("Alamat Orang Tua","alamatOrtu")}${inp("Nama Wali","namaWali")}
+    ${inp("Pekerjaan Wali","pekerjaanWali")}${inp("Alamat Wali","alamatWali")}
+    ${sel("Status Akhir","statusAkhir",`<option ${!s.statusAkhir||s.statusAkhir==="Aktif"?"selected":""}>Aktif</option><option ${s.statusAkhir==="Pindah"?"selected":""}>Pindah</option><option ${s.statusAkhir==="Lulus"?"selected":""}>Lulus</option><option ${s.statusAkhir==="Drop Out"?"selected":""}>Drop Out</option>`)}
+  </div>`;
+  openModal(id?"Edit Siswa":"Tambah Siswa",body,`<button onclick="closeModal()" class="px-4 py-2 rounded bg-slate-200 text-sm">Batal</button><button onclick="simpanSiswa('${id||""}')" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-save mr-1"></i>Simpan</button>`);
+}
+function simpanSiswa(id){
+  const o={};document.querySelectorAll("#modalBody [data-k]").forEach(el=>o[el.dataset.k]=el.value.trim());
+  o.foto=$("tmpFoto").value||"";
+  if(!o.nama||!o.jk){alert("Nama dan Jenis Kelamin wajib diisi.");return;}
+  if(o.nisn&&!/^\d{10}$/.test(o.nisn)){alert("NISN harus 10 digit angka (atau kosongkan).");return;}
+  if(o.nik&&!/^\d{16}$/.test(o.nik)){alert("NIK harus 16 digit angka (atau kosongkan).");return;}
+  const dup=studentDb.find(x=>x.id!==id&&((o.nis&&x.nis===o.nis)||(o.nisn&&x.nisn===o.nisn)||(o.nik&&x.nik===o.nik)));
+  if(dup){alert("Data duplikat: NIS/NISN/NIK sudah terdaftar atas nama "+dup.nama+".");return;}
+  if(id){Object.assign(studentDb.find(x=>x.id===id),o);}
+  else{o.id=uid("std");o.nis=o.nis||("SIS-"+Date.now().toString().slice(-8));o.tahunAjaran=activeFilters.tahunAjaran;studentDb.push(o);}
+  closeModal();scheduleSave();renderSiswa();
+}
+function hapusSiswa(id){const s=studentDb.find(x=>x.id===id);if(confirm("Hapus siswa "+s.nama+"? Data nilai terkait juga akan dihapus.")){studentDb=studentDb.filter(x=>x.id!==id);Object.keys(gradeDb).forEach(k=>{if(k.startsWith(s.nis+"_"))delete gradeDb[k];});scheduleSave();renderSiswa();}}
+function printBiodata(id){
+  const s=studentDb.find(x=>x.id===id);if(!s)return;
+  const sk=parameterDb.sekolah||{};
+  const row=(l,v)=>`<tr><td style="width:35%">${l}</td><td style="width:2%">:</td><td>${v||"-"}</td></tr>`;
+  $("printArea").innerHTML=`${kopCetak()}
+    <h2 style="text-align:center;font-size:13pt;font-weight:bold;margin:15px 0;text-decoration:underline">BIODATA PESERTA DIDIK</h2>
+    <div style="position:relative">
+      <div style="position:absolute;right:0;top:0;text-align:center">
+        <div style="width:110px;height:145px;border:1px solid #000;display:flex;align-items:center;justify-content:center;background:#fff">
+          ${s.foto?`<img src="${esc(s.foto)}=w220-h290-c" style="max-width:108px;max-height:143px;object-fit:cover">`:`<span style="color:#999;font-size:10px">Pas Foto<br>3×4</span>`}
+        </div><div style="font-size:9pt;margin-top:4px">Foto 3×4</div></div>
+      <table style="width:70%;font-size:10.5pt;border:none!important">
+        ${row("Nama Lengkap",esc(s.nama))}
+        ${row("NIS",esc(s.nis))}${row("NISN",esc(s.nisn))}${row("NIK",esc(s.nik))}
+        ${row("Jenis Kelamin",s.jk==="L"?"Laki-laki":"Perempuan")}
+        ${row("Agama",esc(s.agama))}${row("Status dalam Keluarga",esc(s.statusKel))}${row("Anak Ke-",esc(s.anakKe))}
+        ${row("Tempat, Tgl Lahir",esc(s.tempatLahir)+(s.tglLahir?", "+tglID(s.tglLahir):""))}
+        ${row("Alamat",esc(s.alamat))}${row("No HP",esc(s.noHp))}
+        ${row("Sekolah Asal",esc(s.sekolahAsal))}${row("Kelas Diterima",esc(s.kelasDiterima))}
+        ${row("Kelas Aktif",kelasAktifSiswa(s).replace(/<[^>]+>/g,""))}${row("Tanggal Diterima",tglID(s.tglDiterima))}
+      </table>
+    </div>
+    <h3 style="font-size:11pt;font-weight:bold;margin:18px 0 6px">A. DATA ORANG TUA KANDUNG</h3>
+    <table style="font-size:10.5pt;border:none!important">
+      ${row("Nama Ayah",esc(s.namaAyah))}${row("Pekerjaan Ayah",esc(s.pekerjaanAyah))}
+      ${row("Nama Ibu",esc(s.namaIbu))}${row("Pekerjaan Ibu",esc(s.pekerjaanIbu))}${row("Alamat Orang Tua",esc(s.alamatOrtu))}
+    </table>
+    <h3 style="font-size:11pt;font-weight:bold;margin:18px 0 6px">B. DATA WALI (jika ada)</h3>
+    <table style="font-size:10.5pt;border:none!important">
+      ${row("Nama Wali",esc(s.namaWali))}${row("Pekerjaan Wali",esc(s.pekerjaanWali))}${row("Alamat Wali",esc(s.alamatWali))}
+    </table>
+    <h3 style="font-size:11pt;font-weight:bold;margin:18px 0 6px">C. STATUS AKHIR</h3>
+    <table style="font-size:10.5pt;border:none!important">${row("Status",esc(s.statusAkhir||"Aktif"))}${row("Tanggal Keluar",tglID(s.tglKeluar))}${row("Alasan",esc(s.alasanKeluar))}</table>
+    <table style="margin-top:40px;width:100%;font-size:10pt"><tr>
+      <td style="border:none!important;text-align:center">Orang Tua / Wali<br><br><br>(____________________)</td>
+      <td style="border:none!important;text-align:center">Wali Kelas<br><br><br>(____________________)</td>
+      <td style="border:none!important;text-align:center">${esc(sk.alamat?sk.alamat.split(",")[0]:"")}, ${tglID(new Date().toISOString().slice(0,10))}<br>Kepala Sekolah<br><br><br><u>${esc(sk.kepalaSekolah||"____________________")}</u><br>NIP. ${esc(sk.nipKepalaSekolah||"—")}</td>
+    </tr></table>`;
+  setTimeout(()=>window.print(),500);
+}
+
+/* ---------- DATA GURU ---------- */
+let guruFilter={status:"",cari:""};
+function renderGuru(){
+  let list=guruDb.slice();
+  if(guruFilter.status) list=list.filter(g=>(g.status||"Aktif")===guruFilter.status);
+  if(guruFilter.cari) list=list.filter(g=>String(g.nama||"").toLowerCase().includes(guruFilter.cari.toLowerCase()));
+  $("content").innerHTML=`
+    <div class="bg-white rounded-xl shadow p-4 mb-4 flex flex-wrap gap-2 items-center no-print">
+      <button onclick="formGuru()" class="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-plus mr-1"></i>Tambah Guru</button>
+      <button onclick="downloadTemplate('guru')" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700"><i class="fa-solid fa-download mr-1"></i>Template Import</button>
+      <button onclick="document.getElementById('importGuru').click()" class="px-3 py-2 rounded bg-amber-500 text-white text-sm hover:bg-amber-600"><i class="fa-solid fa-file-import mr-1"></i>Import CSV/Excel</button>
+      <input type="file" id="importGuru" class="hidden" accept=".csv,.xlsx,.xls" onchange="importData(this,'guru')">
+      <div class="flex-1"></div>
+      <select onchange="guruFilter.status=this.value;renderGuru()" class="border rounded px-2 py-1.5 text-sm">
+        <option value="">Semua Status</option><option ${guruFilter.status==="Aktif"?"selected":""}>Aktif</option><option ${guruFilter.status==="Nonaktif"?"selected":""}>Nonaktif</option>
+      </select>
+      <input oninput="guruFilter.cari=this.value;renderGuru()" value="${esc(guruFilter.cari)}" placeholder="Cari nama guru…" class="border rounded px-3 py-1.5 text-sm w-48">
+    </div>
+    <div class="bg-white rounded-xl shadow overflow-x-auto">
+      <table class="w-full text-sm"><thead class="bg-slate-100 text-slate-600 text-xs uppercase"><tr>
+        <th class="p-3 text-left">Foto</th><th class="p-3 text-left">NIP</th><th class="p-3 text-left">Nama</th><th class="p-3 text-center">JK</th>
+        <th class="p-3 text-left">Mapel Diampu</th><th class="p-3 text-center">Status</th><th class="p-3 text-center no-print">Aksi</th></tr></thead><tbody>
+        ${list.map(g=>`<tr class="border-t hover:bg-slate-50">
+          <td class="p-2 pl-3">${fotoCell(g.foto,g.nama,40)}</td>
+          <td class="p-2 font-mono text-xs">${esc(g.nip||"-")}</td>
+          <td class="p-2 font-medium">${esc(g.nama)}</td>
+          <td class="p-2 text-center">${g.jk==="L"?'<span class="px-2 py-0.5 rounded bg-sky-100 text-sky-700 text-xs">L</span>':'<span class="px-2 py-0.5 rounded bg-pink-100 text-pink-700 text-xs">P</span>'}</td>
+          <td class="p-2 text-xs">${(g.mapelDiampu||[]).map(k=>{const m=mapelDb.find(x=>x.kode===k);return m?m.nama:k;}).join(", ")||"-"}</td>
+          <td class="p-2 text-center">${(g.status||"Aktif")==="Aktif"?'<span class="px-2 py-0.5 rounded bg-green-100 text-green-700 text-xs">Aktif</span>':'<span class="px-2 py-0.5 rounded bg-slate-200 text-slate-600 text-xs">Nonaktif</span>'}</td>
+          <td class="p-2 text-center no-print whitespace-nowrap">
+            <button onclick="formGuru('${g.id}')" class="text-blue-600 text-xs mr-2"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="hapusGuru('${g.id}')" class="text-red-500 text-xs"><i class="fa-solid fa-trash"></i></button>
+          </td></tr>`).join("")||`<tr><td colspan="7" class="p-8 text-center text-slate-400 italic">Belum ada data guru.</td></tr>`}
+      </tbody></table>
+      <div class="p-3 text-xs text-slate-500 border-t">Menampilkan ${list.length} guru. Hanya guru <b>Aktif</b> yang dapat dipilih sebagai wali kelas.</div>
+    </div>`;
+}
+function formGuru(id){
+  const g=id?guruDb.find(x=>x.id===id):{};
+  const inp=(label,key,ph="")=>`<div><label class="text-xs text-slate-500">${label}</label><input data-k="${key}" value="${esc(g[key]||"")}" placeholder="${ph}" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>`;
+  const body=`<div class="grid grid-cols-2 gap-3">
+    <div class="col-span-2 flex items-center gap-3 p-3 bg-slate-50 rounded">
+      <div id="fotoPreviewGuru">${fotoCell(g.foto,g.nama||"?",64)}</div>
+      <div><label class="text-xs text-slate-500 block mb-1">Foto (maks 2 MB)</label>
+        <input type="file" accept="image/*" onchange="handleFotoInput(this,'guru',u=>{document.getElementById('tmpFotoG').value=u;document.getElementById('fotoPreviewGuru').innerHTML='<img src=\\''+u+'=w128-h128-c\\' class=thumb style=width:64px;height:64px>'})" class="text-xs"></div>
+      <input type="hidden" id="tmpFotoG" value="${esc(g.foto||"")}">
+    </div>
+    <div><label class="text-xs text-slate-500">Jenis Kelamin *</label><select data-k="jk" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"><option value="">—</option><option value="L" ${g.jk==="L"?"selected":""}>Laki-laki</option><option value="P" ${g.jk==="P"?"selected":""}>Perempuan</option></select></div>
+    ${inp("Nama Lengkap *","nama")}
+    ${inp("NIP (18 digit jika PNS)","nip")}${inp("NIK (16 digit)","nik")}
+    ${inp("Alamat","alamat")}${inp("No HP","noHp")}
+    <div class="col-span-2"><label class="text-xs text-slate-500">Mapel Diampu (tahan Ctrl untuk multi-pilih)</label>
+      <select data-k="mapelDiampu" multiple class="w-full border rounded px-2 py-1.5 text-sm mt-0.5 h-24">
+        ${mapelDb.filter(m=>m.aktif).map(m=>`<option value="${m.kode}" ${(g.mapelDiampu||[]).includes(m.kode)?"selected":""}>${esc(m.nama)}</option>`).join("")}
+      </select></div>
+    <div><label class="text-xs text-slate-500">Status</label><select data-k="status" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"><option ${(g.status||"Aktif")==="Aktif"?"selected":""}>Aktif</option><option ${g.status==="Nonaktif"?"selected":""}>Nonaktif</option></select></div>
+  </div>`;
+  openModal(id?"Edit Guru":"Tambah Guru",body,`<button onclick="closeModal()" class="px-4 py-2 rounded bg-slate-200 text-sm">Batal</button><button onclick="simpanGuru('${id||""}')" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-save mr-1"></i>Simpan</button>`);
+}
+function simpanGuru(id){
+  const o={};document.querySelectorAll("#modalBody [data-k]").forEach(el=>{
+    if(el.dataset.k==="mapelDiampu") o.mapelDiampu=Array.from(el.selectedOptions).map(x=>x.value);
+    else o[el.dataset.k]=el.value.trim();
+  });
+  o.foto=$("tmpFotoG").value||"";
+  if(!o.nama||!o.jk){alert("Nama dan Jenis Kelamin wajib diisi.");return;}
+  if(o.nik&&!/^\d{16}$/.test(o.nik)){alert("NIK harus 16 digit (atau kosongkan).");return;}
+  if(id)Object.assign(guruDb.find(x=>x.id===id),o);
+  else{o.id=uid("gur");guruDb.push(o);}
+  closeModal();scheduleSave();renderGuru();
+}
+function hapusGuru(id){const g=guruDb.find(x=>x.id===id);if(confirm("Hapus guru "+g.nama+"?")){guruDb=guruDb.filter(x=>x.id!==id);kelasDb.forEach(k=>{if(k.waliKelasId===id)k.waliKelasId="";});scheduleSave();renderGuru();}}
+
+/* ---------- KELAS ---------- */
+function renderKelas(){
+  const list=kelasDb.filter(k=>k.tahunAjaran===activeFilters.tahunAjaran);
+  const guruAktif=guruDb.filter(g=>(g.status||"Aktif")==="Aktif");
+  $("content").innerHTML=`
+    <div class="bg-white rounded-xl shadow p-4 mb-4 flex gap-2 items-center no-print">
+      <button onclick="formKelas()" class="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-plus mr-1"></i>Tambah Kelas</button>
+      <span class="text-xs text-slate-500 ml-2">TA aktif: <b>${esc(activeFilters.tahunAjaran)}</b> · Wali kelas dipilih dari guru Aktif (${guruAktif.length} orang)</span>
+    </div>
+    <div class="bg-white rounded-xl shadow overflow-x-auto"><table class="w-full text-sm">
+      <thead class="bg-slate-100 text-slate-600 text-xs uppercase"><tr><th class="p-3 text-left">Nama Kelas</th><th class="p-3 text-left">Tingkat</th><th class="p-3 text-left">Wali Kelas</th><th class="p-3 text-left">Ruangan</th><th class="p-3 text-center">Jml Siswa</th><th class="p-3 text-center no-print">Aksi</th></tr></thead><tbody>
+      ${list.map(k=>{const w=guruDb.find(g=>g.id===k.waliKelasId);const j=studentDb.filter(s=>s.kelasAktifId===k.id&&(s.tahunAjaran||activeFilters.tahunAjaran)===activeFilters.tahunAjaran).length;return `<tr class="border-t hover:bg-slate-50"><td class="p-2 pl-3 font-semibold">${esc(k.namaKelas)}</td><td class="p-2">${esc(k.tingkat||"-")}</td><td class="p-2">${w?esc(w.nama):'<span class="text-slate-400 italic">Belum ada</span>'}</td><td class="p-2">${esc(k.ruangan||"-")}</td><td class="p-2 text-center font-bold">${j}</td><td class="p-2 text-center no-print whitespace-nowrap"><button onclick="formKelas('${k.id}')" class="text-blue-600 text-xs mr-2"><i class="fa-solid fa-pen"></i></button><button onclick="hapusKelas('${k.id}')" class="text-red-500 text-xs"><i class="fa-solid fa-trash"></i></button></td></tr>`;}).join("")||`<tr><td colspan="6" class="p-8 text-center text-slate-400 italic">Belum ada kelas untuk TA ini.</td></tr>`}
+    </tbody></table></div>`;
+}
+function formKelas(id){
+  const k=id?kelasDb.find(x=>x.id===id):{};
+  const guruAktif=guruDb.filter(g=>(g.status||"Aktif")==="Aktif");
+  const body=`<div class="grid grid-cols-2 gap-3">
+    <div><label class="text-xs text-slate-500">Nama Kelas *</label><input data-k="namaKelas" value="${esc(k.namaKelas||"")}" placeholder="mis. VII-A" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>
+    <div><label class="text-xs text-slate-500">Tingkat *</label><input data-k="tingkat" value="${esc(k.tingkat||"")}" placeholder="mis. VII" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>
+    <div><label class="text-xs text-slate-500">Ruangan</label><input data-k="ruangan" value="${esc(k.ruangan||"")}" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>
+    <div><label class="text-xs text-slate-500">Wali Kelas</label><select data-k="waliKelasId" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"><option value="">— Belum ada —</option>${guruAktif.map(g=>`<option value="${g.id}" ${k.waliKelasId===g.id?"selected":""}>${esc(g.nama)}</option>`).join("")}</select></div>
+    <div class="col-span-2 text-xs text-slate-400">Tahun Ajaran otomatis: ${esc(activeFilters.tahunAjaran)}</div>
+  </div>`;
+  openModal(id?"Edit Kelas":"Tambah Kelas",body,`<button onclick="closeModal()" class="px-4 py-2 rounded bg-slate-200 text-sm">Batal</button><button onclick="simpanKelas('${id||""}')" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700">Simpan</button>`);
+}
+function simpanKelas(id){
+  const o={};document.querySelectorAll("#modalBody [data-k]").forEach(el=>o[el.dataset.k]=el.value.trim());
+  if(!o.namaKelas||!o.tingkat){alert("Nama Kelas & Tingkat wajib diisi.");return;}
+  if(id)Object.assign(kelasDb.find(x=>x.id===id),o);
+  else{o.id=uid("kls");o.tahunAjaran=activeFilters.tahunAjaran;kelasDb.push(o);}
+  closeModal();scheduleSave();renderKelas();
+}
+function hapusKelas(id){const k=kelasDb.find(x=>x.id===id);const j=studentDb.filter(s=>s.kelasAktifId===id).length;if(confirm(`Hapus kelas ${k.namaKelas}?${j?` ${j} siswa akan menjadi "Belum Ditempatkan".`:""}`)){kelasDb=kelasDb.filter(x=>x.id!==id);studentDb.forEach(s=>{if(s.kelasAktifId===id)s.kelasAktifId="";});scheduleSave();renderKelas();}}
+
+/* ---------- MAPEL ---------- */
+function renderMapel(){
+  $("content").innerHTML=`
+    <div class="bg-white rounded-xl shadow p-4 mb-4 flex gap-2 items-center no-print">
+      <button onclick="formMapel()" class="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-plus mr-1"></i>Tambah Mapel</button>
+      <span class="text-xs text-slate-500 ml-2">Mapel menentukan kolom nilai secara otomatis — tidak di-hardcode.</span>
+    </div>
+    <div class="bg-white rounded-xl shadow overflow-x-auto"><table class="w-full text-sm">
+      <thead class="bg-slate-100 text-slate-600 text-xs uppercase"><tr><th class="p-3 text-left">Kode</th><th class="p-3 text-left">Nama Mata Pelajaran</th><th class="p-3 text-left">Kelompok</th><th class="p-3 text-left">Tingkat</th><th class="p-3 text-center">Aktif</th><th class="p-3 text-center no-print">Aksi</th></tr></thead><tbody>
+      ${mapelDb.map(m=>`<tr class="border-t hover:bg-slate-50"><td class="p-2 pl-3 font-mono font-bold">${esc(m.kode)}</td><td class="p-2">${esc(m.nama)}</td><td class="p-2">${esc(m.kelompok||"-")}</td><td class="p-2">${esc(m.tingkat||"Semua")}</td><td class="p-2 text-center"><button onclick="toggleMapel('${m.id}')" class="text-xs px-2 py-0.5 rounded ${m.aktif!==false?'bg-green-100 text-green-700':'bg-slate-200 text-slate-500'}">${m.aktif!==false?'Aktif':'Nonaktif'}</button></td><td class="p-2 text-center no-print whitespace-nowrap"><button onclick="formMapel('${m.id}')" class="text-blue-600 text-xs mr-2"><i class="fa-solid fa-pen"></i></button><button onclick="hapusMapel('${m.id}')" class="text-red-500 text-xs"><i class="fa-solid fa-trash"></i></button></td></tr>`).join("")||`<tr><td colspan="6" class="p-8 text-center text-slate-400 italic">Belum ada mapel.</td></tr>`}
+    </tbody></table></div>`;
+}
+function formMapel(id){
+  const m=id?mapelDb.find(x=>x.id===id):{};
+  const body=`<div class="grid grid-cols-2 gap-3">
+    <div><label class="text-xs text-slate-500">Kode * (unik, jadi kolom nilai)</label><input data-k="kode" value="${esc(m.kode||"")}" placeholder="mis. mtk" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>
+    <div><label class="text-xs text-slate-500">Kelompok</label><select data-k="kelompok" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"><option>A</option><option>B</option><option>C</option><option>Muatan Lokal</option></select></div>
+    <div class="col-span-2"><label class="text-xs text-slate-500">Nama Mata Pelajaran *</label><input data-k="nama" value="${esc(m.nama||"")}" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>
+    <div><label class="text-xs text-slate-500">Tingkat</label><input data-k="tingkat" value="${esc(m.tingkat||"Semua")}" placeholder="Semua / VII / VIII / IX" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>
+  </div>`;
+  openModal(id?"Edit Mapel":"Tambah Mapel",body,`<button onclick="closeModal()" class="px-4 py-2 rounded bg-slate-200 text-sm">Batal</button><button onclick="simpanMapel('${id||""}')" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700">Simpan</button>`);
+}
+function simpanMapel(id){
+  const o={};document.querySelectorAll("#modalBody [data-k]").forEach(el=>o[el.dataset.k]=el.value.trim());
+  if(!o.kode||!o.nama){alert("Kode & Nama mapel wajib diisi.");return;}
+  if(mapelDb.some(m=>m.kode===o.kode&&m.id!==id)){alert("Kode mapel harus unik.");return;}
+  if(id)Object.assign(mapelDb.find(x=>x.id===id),o);
+  else mapelDb.push({id:uid("mpl"),...o,aktif:true});
+  closeModal();scheduleSave();renderMapel();
+}
+function toggleMapel(id){const m=mapelDb.find(x=>x.id===id);m.aktif=m.aktif===false?true:false;scheduleSave();renderMapel();}
+function hapusMapel(id){if(confirm("Hapus mapel? Kolom nilai terkait akan dihapus pada simpan berikutnya.")){mapelDb=mapelDb.filter(x=>x.id!==id);scheduleSave();renderMapel();}}
+
+/* ---------- NILAI RAPOR ---------- */
+let nilaiState={kelas:"",cari:"",siswaId:null,semester:null};
+function renderNilai(){
+  const kelasTA=kelasDb.filter(k=>k.tahunAjaran===activeFilters.tahunAjaran);
+  let siswaList=studentDb.filter(s=>(s.tahunAjaran||activeFilters.tahunAjaran)===activeFilters.tahunAjaran);
+  if(nilaiState.kelas==="__none__") siswaList=siswaList.filter(s=>!s.kelasAktifId);
+  else if(nilaiState.kelas) siswaList=siswaList.filter(s=>s.kelasAktifId===nilaiState.kelas);
+  if(nilaiState.cari) siswaList=siswaList.filter(s=>String(s.nama||"").toLowerCase().includes(nilaiState.cari.toLowerCase()));
+  const siswa=nilaiState.siswaId?studentDb.find(s=>s.id===nilaiState.siswaId):null;
+  const sem=nilaiState.semester||activeFilters.semester;
+  const mapelAktif=mapelDb.filter(m=>m.aktif!==false);
+  let nilaiForm="";
+  if(siswa){
+    const key=siswa.nis+"_"+sem;
+    const data=gradeDb[key]||{};
+    nilaiForm=`<div class="bg-white rounded-xl shadow p-5 mt-4">
+      <h3 class="font-bold text-slate-800 mb-1"><i class="fa-solid fa-scroll text-blue-600 mr-2"></i>Nilai: ${esc(siswa.nama)} <span class="text-slate-400 font-normal">(${esc(siswa.nis)}) — Semester ${esc(sem)}</span></h3>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+        ${mapelAktif.map(m=>`<div><label class="text-xs text-slate-500">${esc(m.nama)} <span class="text-slate-300">(${esc(m.kode)})</span></label>
+          <input data-nilai="${m.kode}" type="number" min="0" max="100" value="${data[m.kode]!=null?data[m.kode]:""}" placeholder="0-100" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>`).join("")}
+      </div>
+      <div class="mt-4 flex gap-2">
+        <button onclick="simpanNilai('${siswa.id}','${esc(sem)}')" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-save mr-1"></i>Simpan Nilai</button>
+        <button onclick="printRapor('${siswa.id}','${esc(sem)}')" class="px-4 py-2 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700"><i class="fa-solid fa-print mr-1"></i>Cetak Rapor</button>
+      </div></div>`;
+  }
+  $("content").innerHTML=`
+    <div class="bg-white rounded-xl shadow p-4 flex flex-wrap gap-2 items-center no-print">
+      <select onchange="nilaiState.kelas=this.value;nilaiState.siswaId=null;renderNilai()" class="border rounded px-2 py-1.5 text-sm">
+        <option value="">Semua Kelas</option><option value="__none__" ${nilaiState.kelas==="__none__"?"selected":""}>Belum Ditempatkan</option>
+        ${kelasTA.map(k=>`<option value="${k.id}" ${nilaiState.kelas===k.id?"selected":""}>${esc(k.namaKelas)}</option>`).join("")}
+      </select>
+      <input oninput="nilaiState.cari=this.value;nilaiState.siswaId=null;renderNilai()" value="${esc(nilaiState.cari)}" placeholder="Cari nama siswa…" class="border rounded px-3 py-1.5 text-sm w-48">
+      <select onchange="nilaiState.semester=this.value;renderNilai()" class="border rounded px-2 py-1.5 text-sm">
+        ${(parameterDb.semester||["Ganjil","Genap"]).map(s=>`<option ${s===sem?"selected":""}>${esc(s)}</option>`).join("")}
+      </select>
+      <span class="text-xs text-slate-500 ml-auto">${siswaList.length} siswa ditemukan — klik nama untuk input nilai</span>
+    </div>
+    <div class="bg-white rounded-xl shadow mt-4 overflow-x-auto max-h-64 overflow-y-auto">
+      <table class="w-full text-sm"><thead class="bg-slate-100 text-xs uppercase text-slate-600 sticky top-0"><tr><th class="p-2 text-left">Foto</th><th class="p-2 text-left">Nama</th><th class="p-2 text-left">Kelas</th><th class="p-2 text-center">Pilih</th></tr></thead><tbody>
+        ${siswaList.map(s=>`<tr class="border-t hover:bg-blue-50 cursor-pointer ${nilaiState.siswaId===s.id?'bg-blue-50':''}" onclick="nilaiState.siswaId='${s.id}';renderNilai()">
+          <td class="p-1 pl-3">${fotoCell(s.foto,s.nama,32)}</td><td class="p-2">${esc(s.nama)}</td><td class="p-2 text-xs">${kelasAktifSiswa(s).replace(/<[^>]+>/g,"")}</td>
+          <td class="p-2 text-center"><i class="fa-solid fa-circle-check ${nilaiState.siswaId===s.id?'text-blue-600':'text-slate-300'}"></i></td></tr>`).join("")||`<tr><td colspan="4" class="p-6 text-center text-slate-400 italic">Tidak ada siswa.</td></tr>`}
+      </tbody></table>
+    </div>${nilaiForm}`;
+}
+function simpanNilai(siswaId,sem){
+  const s=studentDb.find(x=>x.id===siswaId);const key=s.nis+"_"+sem;const o={};
+  document.querySelectorAll("[data-nilai]").forEach(el=>{const v=el.value.trim();o[el.dataset.nilai]=v===""?null:Math.max(0,Math.min(100,Number(v)));});
+  gradeDb[key]=o;scheduleSave();alert("Nilai tersimpan.");
+}
+function printRapor(siswaId,sem){
+  const s=studentDb.find(x=>x.id===siswaId);const key=s.nis+"_"+sem;const data=gradeDb[key]||{};
+  const mapelAktif=mapelDb.filter(m=>m.aktif!==false);
+  const vals=mapelAktif.map(m=>data[m.kode]).filter(v=>v!=null);
+  const rata=vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):"-";
+  $("printArea").innerHTML=`${kopCetak()}
+    <h2 style="text-align:center;font-size:13pt;font-weight:bold;margin:15px 0;text-decoration:underline">RAPOR NILAI — SEMESTER ${esc(sem).toUpperCase()}</h2>
+    <table style="margin-bottom:15px;font-size:10.5pt;border:none!important">
+      <tr><td style="border:none!important;width:25%">Nama</td><td style="border:none!important;width:2%">:</td><td style="border:none!important">${esc(s.nama)}</td><td style="border:none!important;width:20%">Kelas</td><td style="border:none!important;width:2%">:</td><td style="border:none!important">${kelasAktifSiswa(s).replace(/<[^>]+>/g,"")}</td></tr>
+      <tr><td style="border:none!important">NISN</td><td style="border:none!important">:</td><td style="border:none!important">${esc(s.nisn||"-")}</td><td style="border:none!important">Tahun Ajaran</td><td style="border:none!important">:</td><td style="border:none!important">${esc(activeFilters.tahunAjaran)}</td></tr>
+    </table>
+    <table><thead><tr><th>No</th><th>Mata Pelajaran</th><th style="text-align:center">Nilai</th><th style="text-align:center">Predikat</th></tr></thead><tbody>
+      ${mapelAktif.map((m,i)=>{const v=data[m.kode];const p=v==null?"-":(v>=90?"A":v>=80?"B":v>=70?"C":v>=60?"D":"E");return `<tr><td style="text-align:center">${i+1}</td><td>${esc(m.nama)}</td><td style="text-align:center">${v==null?"-":v}</td><td style="text-align:center">${p}</td></tr>`;}).join("")}
+      <tr><td colspan="2" style="text-align:right;font-weight:bold">Rata-rata</td><td style="text-align:center;font-weight:bold">${rata}</td><td></td></tr>
+    </tbody></table>
+    <table style="margin-top:40px;width:100%;font-size:10pt"><tr>
+      <td style="border:none!important;text-align:center">Wali Kelas<br><br><br>(____________________)</td>
+      <td style="border:none!important;text-align:center">Orang Tua / Wali<br><br><br>(____________________)</td>
+      <td style="border:none!important;text-align:center">Kepala Sekolah<br><br><br><u>${esc((parameterDb.sekolah||{}).kepalaSekolah||"____________________")}</u></td>
+    </tr></table>`;
+  setTimeout(()=>window.print(),500);
+}
+
+/* ---------- PENGATURAN ---------- */
+let pengTab="identitas";
+function renderPengaturan(opts){
+  pengTab=(opts&&opts.tab)||pengTab;
+  const tabs=[["identitas","Identitas Sekolah",fa("fa-school")],["tema","Tema Warna",fa("fa-palette")],["ta","Tahun Ajaran & Semester",fa("fa-calendar-days")],["user","User Management",fa("fa-users-gear")],["integrasi","Integrasi GAS",fa("fa-plug")]];
+  $("content").innerHTML=`
+    <div class="bg-white rounded-xl shadow p-2 mb-4 flex gap-1 flex-wrap no-print">
+      ${tabs.map(([id,label,ic])=>`<button onclick="pengTab='${id}';renderPengaturan()" class="px-3 py-2 rounded text-sm ${pengTab===id?'text-white':'text-slate-600 hover:bg-slate-100'}" style="${pengTab===id?'background:var(--menu-active)':''}">${ic} ${label}</button>`).join("")}
+    </div>
+    <div id="pengBody"></div>`;
+  ({identitas:pengIdentitas,tema:pengTema,ta:pengTA,user:pengUser,integrasi:pengIntegrasi}[pengTab])();
+}
+const fa=c=>`<i class="fa-solid ${c} mr-1"></i>`;
+function pengIdentitas(){
+  const sk=parameterDb.sekolah||{};
+  const inp=(label,key,ph="")=>`<div><label class="text-xs text-slate-500">${label}</label><input id="sk_${key}" value="${esc(sk[key]||"")}" placeholder="${ph}" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>`;
+  $("pengBody").innerHTML=`<div class="bg-white rounded-xl shadow p-5">
+    <div class="flex items-start gap-5 mb-4">
+      <div class="text-center"><div class="logo-box shadow" id="logoPreview" style="width:90px;height:90px">${sk.logo?`<img src="${esc(sk.logo)}=w180-h180-c" style="max-width:82px;max-height:82px">`:`<span class="text-3xl text-slate-300"><i class="fa-solid fa-image"></i></span>`}</div>
+        <label class="text-xs text-blue-600 cursor-pointer block mt-2">Upload Logo (≤500 KB)<input type="file" accept="image/*" class="hidden" onchange="handleFotoInput(this,'logo',u=>{document.getElementById('sk_logo').value=u;document.getElementById('logoPreview').innerHTML='<img src=\\''+u+'=w180-h180-c\\' style=max-width:82px;max-height:82px>'},0.5)"></label></div>
+      <input type="hidden" id="sk_logo" value="${esc(sk.logo||"")}">
+      <div class="grid grid-cols-2 gap-3 flex-1">${inp("Nama Aplikasi","namaAplikasi","SI-BIS PRO")}${inp("Nama Sekolah","namaSekolah")}${inp("NPSN","npsn")}${inp("Kepala Sekolah","kepalaSekolah")}${inp("NIP Kepala Sekolah","nipKepalaSekolah")}<div class="col-span-2">${inp("Alamat Sekolah","alamat")}</div></div>
+    </div>
+    <button onclick="simpanIdentitas()" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-save mr-1"></i>Simpan Identitas</button>
+  </div>`;
+}
+function simpanIdentitas(){
+  ["namaAplikasi","namaSekolah","npsn","alamat","kepalaSekolah","nipKepalaSekolah","logo"].forEach(k=>parameterDb.sekolah[k]=$("sk_"+k).value.trim());
+  applyIdentitas();scheduleSave();alert("Identitas tersimpan.");
+}
+function pengTema(){
+  const t=parameterDb.theme;
+  const items=[["sidebarBg","Warna Background Sidebar"],["menuActive","Warna Menu Aktif"],["menuHover","Warna Menu Hover"],["contentBg","Warna Background Konten"]];
+  $("pengBody").innerHTML=`<div class="bg-white rounded-xl shadow p-5">
+    <p class="text-sm text-slate-500 mb-4">Ubah warna — pratinjau langsung terlihat. Klik Simpan untuk menerapkan permanen.</p>
+    <div class="grid grid-cols-2 gap-4 max-w-2xl">
+      ${items.map(([k,label])=>`<div class="flex items-center gap-3 p-3 border rounded-lg"><input type="color" id="tema_${k}" value="${t[k]}" oninput="previewTema()" class="w-12 h-12 rounded cursor-pointer border"><div><div class="text-sm font-medium text-slate-700">${label}</div><div class="text-xs font-mono text-slate-400" id="temaVal_${k}">${t[k]}</div></div></div>`).join("")}
+    </div>
+    <div class="mt-4 flex gap-2"><button onclick="simpanTema()" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"><i class="fa-solid fa-save mr-1"></i>Simpan Tema</button>
+    <button onclick="resetTema()" class="px-4 py-2 rounded bg-slate-200 text-sm hover:bg-slate-300">Reset Default</button></div>
+  </div>`;
+}
+function previewTema(){["sidebarBg","menuActive","menuHover","contentBg"].forEach(k=>{const v=$("tema_"+k).value;$("temaVal_"+k).textContent=v;parameterDb.theme[k]=v;});applyTheme(parameterDb.theme);}
+function simpanTema(){previewTema();scheduleSave();alert("Tema tersimpan.");}
+function resetTema(){parameterDb.theme={sidebarBg:"#1e3a8a",menuActive:"#2563eb",menuHover:"#3b82f6",contentBg:"#f1f5f9"};applyTheme(parameterDb.theme);scheduleSave();renderPengaturan();}
+function pengTA(){
+  $("pengBody").innerHTML=`<div class="bg-white rounded-xl shadow p-5">
+    <h3 class="font-bold text-slate-800 mb-3">Tahun Ajaran</h3>
+    <div class="flex gap-2 mb-3"><input id="taBaru" placeholder="mis. 2027/2028" class="border rounded px-3 py-1.5 text-sm w-48"><button onclick="tambahTA()" class="px-3 py-1.5 rounded bg-blue-600 text-white text-sm">Tambah</button></div>
+    <div class="flex flex-wrap gap-2 mb-6">${parameterDb.tahunAjaran.map(t=>`<span class="px-3 py-1.5 rounded bg-slate-100 text-sm flex items-center gap-2">${esc(t)} ${t===activeFilters.tahunAjaran?'<span class="text-xs text-green-600">(aktif)</span>':''}<button onclick="hapusTA('${esc(t)}')" class="text-red-500"><i class="fa-solid fa-xmark"></i></button></span>`).join("")}</div>
+    <h3 class="font-bold text-slate-800 mb-3">Semester</h3>
+    <div class="flex gap-2 mb-3"><input id="smBaru" placeholder="mis. Gasal" class="border rounded px-3 py-1.5 text-sm w-48"><button onclick="tambahSM()" class="px-3 py-1.5 rounded bg-blue-600 text-white text-sm">Tambah</button></div>
+    <div class="flex flex-wrap gap-2">${(parameterDb.semester||[]).map(s=>`<span class="px-3 py-1.5 rounded bg-slate-100 text-sm flex items-center gap-2">${esc(s)}<button onclick="hapusSM('${esc(s)}')" class="text-red-500"><i class="fa-solid fa-xmark"></i></button></span>`).join("")}</div>
+    <p class="text-xs text-slate-400 mt-4">Ganti TA/Semester aktif melalui dropdown di header (kanan atas). Penghapusan TA yang masih memiliki data kelas/siswa akan dikonfirmasi.</p>
+  </div>`;
+}
+function tambahTA(){const v=$("taBaru").value.trim();if(!v)return;if(parameterDb.tahunAjaran.includes(v)){alert("TA sudah ada.");return;}parameterDb.tahunAjaran.push(v);scheduleSave();renderFilters();renderPengaturan();}
+function hapusTA(t){const j=kelasDb.filter(k=>k.tahunAjaran===t).length+studentDb.filter(s=>(s.tahunAjaran||activeFilters.tahunAjaran)===t).length;if(j&&!confirm(`TA ${t} masih memiliki ${j} data terkait. Hapus tetap?`))return;parameterDb.tahunAjaran=parameterDb.tahunAjaran.filter(x=>x!==t);if(activeFilters.tahunAjaran===t)activeFilters.tahunAjaran=parameterDb.tahunAjaran[parameterDb.tahunAjaran.length-1]||"";scheduleSave();renderFilters();renderPengaturan();}
+function tambahSM(){const v=$("smBaru").value.trim();if(!v)return;if(!parameterDb.semester)parameterDb.semester=["Ganjil","Genap"];if(parameterDb.semester.includes(v))return;parameterDb.semester.push(v);scheduleSave();renderFilters();renderPengaturan();}
+function hapusSM(s){parameterDb.semester=(parameterDb.semester||[]).filter(x=>x!==s);if(activeFilters.semester===s)activeFilters.semester=parameterDb.semester[0]||"Ganjil";scheduleSave();renderFilters();renderPengaturan();}
+function pengUser(){
+  $("pengBody").innerHTML=`<div class="bg-white rounded-xl shadow p-5">
+    <div class="flex justify-between items-center mb-3"><h3 class="font-bold text-slate-800">Daftar User</h3>
+      <button onclick="formUser()" class="px-3 py-1.5 rounded bg-blue-600 text-white text-sm"><i class="fa-solid fa-plus mr-1"></i>Tambah User</button></div>
+    <table class="w-full text-sm"><thead class="bg-slate-100 text-xs uppercase text-slate-600"><tr><th class="p-2 text-left">Username</th><th class="p-2 text-left">Nama</th><th class="p-2 text-left">Role</th><th class="p-2 text-center no-print">Aksi</th></tr></thead><tbody>
+      ${usersDb.map(u=>`<tr class="border-t"><td class="p-2 font-mono">${esc(u.username)}</td><td class="p-2">${esc(u.nama)}</td><td class="p-2"><span class="px-2 py-0.5 rounded text-xs ${u.role==="Admin"?'bg-purple-100 text-purple-700':'bg-slate-100 text-slate-600'}">${esc(u.role)}</span></td><td class="p-2 text-center no-print whitespace-nowrap"><button onclick="formUser('${u.id}')" class="text-blue-600 text-xs mr-2"><i class="fa-solid fa-pen"></i></button><button onclick="hapusUser('${u.id}')" class="text-red-500 text-xs"><i class="fa-solid fa-trash"></i></button></td></tr>`).join("")||`<tr><td colspan="4" class="p-6 text-center text-slate-400 italic">Belum ada user.</td></tr>`}
+    </tbody></table>
+    <p class="text-xs text-slate-400 mt-3">Admin: akses penuh + Pengaturan. Operator: data & cetak saja. Password disimpan hash SHA-256 (tidak pernah dikirim ke client).</p>
+  </div>`;
+}
+function formUser(id){
+  const u=id?usersDb.find(x=>x.id===id):{};
+  const body=`<div class="grid grid-cols-2 gap-3">
+    <div><label class="text-xs text-slate-500">Username * (unik, tanpa spasi)</label><input id="usr_username" value="${esc(u.username||"")}" ${id?"readonly":""} class="w-full border rounded px-2 py-1.5 text-sm mt-0.5 ${id?'bg-slate-100':''}"></div>
+    <div><label class="text-xs text-slate-500">Role</label><select id="usr_role" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"><option ${u.role==="Admin"?"selected":""}>Admin</option><option ${u.role!=="Admin"?"selected":""}>Operator</option></select></div>
+    <div class="col-span-2"><label class="text-xs text-slate-500">Nama Lengkap *</label><input id="usr_nama" value="${esc(u.nama||"")}" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>
+    <div class="col-span-2"><label class="text-xs text-slate-500">Password ${id?"(kosongkan = tidak diubah)":"* (min 4 karakter)"}</label><input id="usr_password" type="password" class="w-full border rounded px-2 py-1.5 text-sm mt-0.5"></div>
+  </div>`;
+  openModal(id?"Edit User":"Tambah User",body,`<button onclick="closeModal()" class="px-4 py-2 rounded bg-slate-200 text-sm">Batal</button><button onclick="simpanUser('${id||""}')" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700">Simpan</button>`);
+}
+function simpanUser(id){
+  const username=$("usr_username").value.trim().toLowerCase(),nama=$("usr_nama").value.trim(),role=$("usr_role").value,pw=$("usr_password").value;
+  if(!username||!nama){alert("Username & Nama wajib diisi.");return;}
+  if(/\s/.test(username)){alert("Username tidak boleh mengandung spasi.");return;}
+  if(!id&&!pw){alert("Password wajib diisi untuk user baru (min 4 karakter).");return;}
+  if(pw&&pw.length<4){alert("Password minimal 4 karakter.");return;}
+  if(!id&&usersDb.some(u=>u.username===username)){alert("Username sudah digunakan.");return;}
+  if(id){const u=usersDb.find(x=>x.id===id);u.nama=nama;u.role=role;if(pw)u.password=pw;}
+  else usersDb.push({id:uid("usr"),username,nama,role,password:pw});
+  closeModal();scheduleSave();pengUser();
+}
+function hapusUser(id){const u=usersDb.find(x=>x.id===id);if(u.username===currentUser.username){alert("Tidak dapat menghapus diri sendiri.");return;}if(usersDb.filter(x=>x.role==="Admin").length===1&&u.role==="Admin"){alert("Minimal harus ada 1 Admin.");return;}if(confirm("Hapus user "+u.username+"?")){usersDb=usersDb.filter(x=>x.id!==id);scheduleSave();pengUser();}}
+function pengIntegrasi(){
+  $("pengBody").innerHTML=`<div class="bg-white rounded-xl shadow p-5 max-w-2xl">
+    <h3 class="font-bold text-slate-800 mb-3"><i class="fa-solid fa-plug text-blue-600 mr-2"></i>Integrasi Google Apps Script</h3>
+    <div class="space-y-2 text-sm">
+      <div class="flex justify-between border-b py-2"><span class="text-slate-500">URL Backend (GAS_URL)</span><span class="font-mono text-xs break-all max-w-md text-right">${esc(GAS_URL)}</span></div>
+      <div class="flex justify-between border-b py-2"><span class="text-slate-500">Status Koneksi</span><span id="gasStatus" class="text-amber-600"><i class="fa-solid fa-circle-notch spin"></i> memeriksa…</span></div>
+      <div class="flex justify-between border-b py-2"><span class="text-slate-500">Folder Drive Foto</span><span>${parameterDb.driveFolderId?'<span class="text-green-600"><i class="fa-solid fa-check"></i> Terhubung</span>':'<span class="text-slate-400">Dibuat otomatis saat upload pertama</span>'}</span></div>
+      <div class="flex justify-between border-b py-2"><span class="text-slate-500">Cache Lokal (offline)</span><span class="text-slate-600">${(localStorage.getItem(LS_KEY)||"").length>10?"Tersedia":"Belum"}</span></div>
+    </div>
+    <div class="mt-4 flex gap-2">
+      <button onclick="exportBackup()" class="px-3 py-2 rounded bg-emerald-600 text-white text-sm"><i class="fa-solid fa-download mr-1"></i>Backup JSON</button>
+      <button onclick="if(confirm('Reset cache lokal? Data di Sheets tetap aman.')){localStorage.removeItem(LS_KEY);location.reload();}" class="px-3 py-2 rounded bg-slate-200 text-sm">Reset Cache Lokal</button>
+    </div>
+    <p class="text-xs text-slate-400 mt-4">Untuk mengganti URL backend, ubah konstanta <code class="bg-slate-100 px-1 rounded">GAS_URL</code> di baris atas bagian &lt;script&gt; file HTML ini.</p>
+  </div>`;
+  gas("getPublicProfile").then(r=>{const el=$("gasStatus");if(el)el.innerHTML=r.offline?'<span class="text-red-600"><i class="fa-solid fa-circle-xmark"></i> Tidak terhubung — periksa URL / jaringan</span>':'<span class="text-green-600"><i class="fa-solid fa-circle-check"></i> Terhubung</span>';});
+}
+function exportBackup(){
+  const blob=new Blob([JSON.stringify({studentDb,guruDb,kelasDb,mapelDb,gradeDb,usersDb,parameterDb},null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="backup-sibis-"+new Date().toISOString().slice(0,10)+".json";a.click();
+}
+
+/* ---------- Import / Export template ---------- */
+function downloadTemplate(tipe){
+  const cols=tipe==="siswa"?SISWA_COLS.filter(c=>!["id"].includes(c)):GURU_COLS.filter(c=>!["id"].includes(c));
+  const contoh=tipe==="siswa"?["Budi Santoso","SIS-0001","0012345678","3201234567890001","L","Islam","Anak Kandung","1","Jakarta","2010-05-12","Jl. Contoh No.1","081234567890","SDN Contoh","VII","","2025-07-15","Ayah Budi","Wiraswasta","Ibu Budi","IRT","Jl. Contoh No.1","","","","","","Aktif","",""]
+    :["198501012010011001","3201850101850001","Siti Aminah, S.Pd.","P","Jl. Guru No.2","081298765432","[\"mtk\",\"ipa\"]","Aktif",""];
+  const csv="\ufeff"+cols.join(";")+"\n"+contoh.map(c=>String(c).replace(/;/g,",")).join(";")+"\n";
+  const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="template-"+tipe+".csv";a.click();
+}
+let importBuffer=null;
+function importData(inputEl,tipe){
+  const f=inputEl.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    let rows=[];
+    if(/\.xlsx?$/i.test(f.name)){
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+      rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:"",raw:false});
+    }else{
+      rows=Papa.parse(e.target.result,{header:true,skipEmptyLines:true,delimitersToGuess:[",",";","\t"]}).data;
+    }
+    prosesImport(rows,tipe);
+  };
+  if(/\.xlsx?$/i.test(f.name))reader.readAsArrayBuffer(f);else reader.readAsText(f);
+  inputEl.value="";
+}
+function prosesImport(rows,tipe){
+  const target=tipe==="siswa"?studentDb:guruDb;
+  const cols=tipe==="siswa"?SISWA_COLS:GURU_COLS;
+  let ok=0,skip=0,err=0;const errors=[];
+  const baru=[];
+  rows.forEach((r,i)=>{
+    const o={};cols.forEach(c=>{let v=r[c]!==undefined?r[c]:(r[c.toLowerCase()]!==undefined?r[c.toLowerCase()]:"");o[c]=String(v||"").trim();});
+    if(tipe==="siswa"){o.id=uid("std");if(!o.nama||!o.jk){err++;errors.push(`Baris ${i+2}: nama/JK kosong`);return;}if(o.nisn&&!/^\d{10}$/.test(o.nisn)){err++;errors.push(`Baris ${i+2}: NISN bukan 10 digit`);return;}if(o.nik&&!/^\d{16}$/.test(o.nik)){err++;errors.push(`Baris ${i+2}: NIK bukan 16 digit`);return;}if(o.nis&&target.some(x=>x.nis===o.nis)){skip++;return;}if(!o.nis)o.nis="SIS-"+Date.now().toString().slice(-8)+i;if(!o.tahunAjaran)o.tahunAjaran=activeFilters.tahunAjaran;if(Array.isArray(o.mapelDiampu))o.mapelDiampu=JSON.stringify(o.mapelDiampu);}
+    else{o.id=uid("gur");if(!o.nama||!o.jk){err++;errors.push(`Baris ${i+2}: nama/JK kosong`);return;}if(o.mapelDiampu){try{o.mapelDiampu=JSON.parse(o.mapelDiampu);}catch(e){o.mapelDiampu=String(o.mapelDiampu).split(",").map(s=>s.trim()).filter(Boolean);}}}
+    ok++;baru.push(o);
+  });
+  importBuffer={tipe,baru};
+  openModal("Konfirmasi Import",`<div class="text-sm space-y-1">
+    <div>Berhasil divalidasi: <b class="text-green-600">${ok}</b></div>
+    <div>Dilewati (duplikat NIS): <b class="text-amber-600">${skip}</b></div>
+    <div>Error: <b class="text-red-600">${err}</b></div>
+    ${errors.length?`<div class="mt-2 max-h-32 overflow-y-auto text-xs text-red-600 bg-red-50 p-2 rounded">${errors.slice(0,10).map(e=>esc(e)).join("<br>")}${errors.length>10?"<br>…dan "+(errors.length-10)+" lagi":""}</div>`:""}
+    <div class="mt-3 text-slate-500">Lanjutkan impor ${ok} data?</div></div>`,
+    `<button onclick="closeModal();importBuffer=null" class="px-4 py-2 rounded bg-slate-200 text-sm">Batal</button>
+     <button onclick="terimaImport()" class="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700">Ya, Impor ${ok} Data</button>`);
+}
+function terimaImport(){
+  if(!importBuffer)return;
+  if(importBuffer.tipe==="siswa")studentDb=studentDb.concat(importBuffer.baru);else guruDb=guruDb.concat(importBuffer.baru);
+  importBuffer=null;closeModal();scheduleSave();showPage(currentPage);
+}
+
+/* ---------- Init ---------- */
+(function init(){
+  if(GAS_URL.indexOf("DEPLOYMENT_ID")>=0){
+    const gh=$("gasHint"); if(gh){gh.classList.remove("hidden");gh.innerHTML='<i class="fa-solid fa-triangle-exclamation mr-1"></i><b>Backend belum dikonfigurasi.</b> Ganti konstanta <code>GAS_URL</code> di file HTML dengan URL hasil deploy, atau klik <b>Mode Demo</b> untuk mencoba sekarang.';}
+  }
+  loadPublicProfile();
+  const sess=JSON.parse(sessionStorage.getItem("sibis_session")||"null");
+  if(sess&&sess.token){currentUser=sess;afterLogin();}
+  $("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
+  $("loginUser").addEventListener("keydown",e=>{if(e.key==="Enter")$("loginPass").focus();});
+})();
+</script>
+</body>
+</html>
