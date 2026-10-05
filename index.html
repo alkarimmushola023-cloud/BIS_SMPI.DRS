@@ -247,7 +247,7 @@ async function doLogin(){
   }else{
     al.classList.remove("hidden");
     al.innerHTML = r.offline
-      ? '<b>Backend belum terhubung (gagal fetch / CORS).</b> Periksa: (1) <code>GAS_URL</code> sudah diganti dengan URL /exec; (2) deploy Web app: <b>Execute as: Me</b> &amp; <b>Who has access: Anyone</b>; (3) setelah edit Code.gs: <b>Manage deployments → Edit → Version: New version → Deploy</b>. Atau klik <b>Mode Demo</b> untuk mencoba.'
+      ? `<b>Backend belum terhubung (gagal fetch / CORS).</b> Periksa: (1) <code>GAS_URL</code> sudah diganti dengan URL /exec; (2) deploy Web app: <b>Execute as: Me</b> &amp; <b>Who has access: Anyone</b> (bukan "Anyone with Google account"); (3) setelah edit Code.gs: <b>Manage deployments → Edit → Version: New version → Deploy</b>, tunggu 1-2 menit, lalu <b>Ctrl+Shift+R</b>.<br><button onclick="window.open(GAS_URL,'_blank')" class="mt-2 px-2 py-1 rounded bg-white border border-amber-300 text-amber-700 text-xs font-semibold"><i class="fa-solid fa-flask mr-1"></i>Tes: buka URL backend di tab baru</button> <span class="text-[10px]">→ muncul teks JSON = deployment sudah publik; muncul halaman login Google = access belum "Anyone".</span><br>Atau klik <b>Mode Demo</b> untuk mencoba.`
       : (r.error||"Login gagal. Periksa username & password.");
   }
 }
