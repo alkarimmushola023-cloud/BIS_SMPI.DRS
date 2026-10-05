@@ -54,14 +54,12 @@
       <p class="text-xs text-slate-400 mt-1">Sistem Informasi Buku Induk Siswa</p>
     </div>
     <div id="loginAlert" class="hidden mb-3 px-3 py-2 rounded text-sm bg-red-50 text-red-700 border border-red-200"></div>
-    <div id="gasHint" class="hidden mb-3 px-3 py-2 rounded text-xs bg-amber-50 text-amber-700 border border-amber-200"></div>
     <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
     <input id="loginUser" type="text" autocomplete="username" class="w-full mb-3 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="admin">
     <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
     <input id="loginPass" type="password" autocomplete="current-password" class="w-full mb-4 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••">
     <button onclick="doLogin()" class="w-full py-2.5 rounded-lg text-white font-semibold hover:opacity-90 transition" style="background:var(--menu-active);"><i class="fa-solid fa-right-to-bracket mr-2"></i>Masuk</button>
-    <button onclick="doLoginDemo()" class="w-full mt-2 py-2 rounded-lg border-2 border-dashed border-slate-300 text-slate-500 font-medium hover:bg-slate-50 text-sm"><i class="fa-solid fa-flask mr-2"></i>Mode Demo — coba tanpa backend</button>
-    <p class="text-xs text-center text-slate-400 mt-4">Default: <b>admin</b> / <b>admin123</b> — segera ganti password.<br>Mode Demo menyimpan data hanya di browser ini (tanpa upload foto).</p>
+    <p class="text-xs text-center text-slate-400 mt-4">Default: <b>admin</b> / <b>admin123</b> — segera ganti password.</p>
   </div>
 </div>
 
@@ -137,7 +135,7 @@ let parameterDb={
 };
 let currentUser=null, activeFilters={tahunAjaran:"2026/2027", semester:"Ganjil"};
 let currentPage="dashboard";
-let saveTimer=null, offline=false, demoMode=false;
+let saveTimer=null, offline=false;
 
 const SISWA_COLS=['id','nama','nis','nisn','nik','jk','agama','statusKel','anakKe','tempatLahir','tglLahir','alamat','noHp','sekolahAsal','kelasDiterima','kelasAktifId','tglDiterima','namaAyah','pekerjaanAyah','namaIbu','pekerjaanIbu','alamatOrtu','namaWali','pekerjaanWali','alamatWali','foto','tahunAjaran','statusAkhir','tglKeluar','alasanKeluar'];
 const GURU_COLS=['id','nip','nik','nama','jk','alamat','noHp','mapelDiampu','status','foto'];
@@ -172,12 +170,6 @@ function kelasAktifSiswa(s){const k=kelasDb.find(x=>x.id===s.kelasAktifId);retur
 
 /* ---------- GAS communication ---------- */
 async function gas(action, data={}){
-  if(demoMode){
-    if(action==="login") return {ok:true, token:"demo-token", user:{username:"admin", nama:"Administrator (Mode Demo)", role:"Admin"}};
-    if(action==="loadData") return {ok:false, offline:true, demo:true};
-    if(action==="uploadPhoto") return {ok:false, error:"Upload foto membutuhkan backend (Google Apps Script).", demo:true};
-    return {ok:true, demo:true};
-  }
   try{
     const res=await fetch(GAS_URL,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action,...(currentUser?{token:currentUser.token}:{}),...data})});
     const j=await res.json();
@@ -196,9 +188,7 @@ function scheduleSave(){
 }
 async function saveAll(){
   localStorage.setItem(LS_KEY,JSON.stringify({studentDb,guruDb,kelasDb,mapelDb,gradeDb,usersDb,parameterDb,activeFilters}));
-  if(demoMode){ setSync('<i class="fa-solid fa-flask text-amber-600"></i> Mode Demo — tersimpan lokal',"bg-amber-100 text-amber-700"); usersDb.forEach(u=>delete u.password); return; }
   const r=await gas("saveData",{siswa:studentDb,guru:guruDb,kelas:kelasDb,mapel:mapelDb,nilai:gradeDb,parameter:parameterDb,users:usersDb});
-  usersDb.forEach(u=>delete u.password); // jangan simpan plaintext di memori/cache
   if(r.ok) setSync('<i class="fa-solid fa-circle-check text-green-600"></i> Tersimpan',"bg-green-100 text-green-700");
   else if(!r.offline) setSync('<i class="fa-solid fa-triangle-exclamation text-red-600"></i> Gagal sinkron',"bg-red-100 text-red-700");
 }
@@ -244,17 +234,8 @@ async function doLogin(){
     sessionStorage.setItem("sibis_session",JSON.stringify(currentUser));
     await afterLogin();
   }else{
-    al.classList.remove("hidden");
-    al.innerHTML = r.offline
-      ? '<b>Backend belum terhubung.</b> Pastikan konstanta <code>GAS_URL</code> sudah diganti dengan URL hasil deploy Apps Script (lihat PANDUAN-DEPLOY). Atau klik <b>Mode Demo</b> untuk mencoba tanpa backend.'
-      : (r.error||"Login gagal. Periksa username & password.");
+    al.classList.remove("hidden");al.textContent=r.error||"Login gagal. Periksa koneksi / URL GAS.";
   }
-}
-function doLoginDemo(){
-  demoMode=true;
-  currentUser={token:"demo-token", username:"admin", nama:"Administrator (Mode Demo)", role:"Admin"};
-  $("loginAlert").classList.add("hidden");
-  afterLogin();
 }
 function doLogout(silent){
   sessionStorage.removeItem("sibis_session");
@@ -276,7 +257,7 @@ async function afterLogin(){
   if(!mapelDb.length) mapelDb=DEFAULT_MAPEL_SMP.map(m=>({id:uid("mpl"),...m,aktif:true}));
   if(!parameterDb.tahunAjaran.length) parameterDb.tahunAjaran=["2025/2026","2026/2027"];
   if(!activeFilters.tahunAjaran||!parameterDb.tahunAjaran.includes(activeFilters.tahunAjaran)) activeFilters.tahunAjaran=parameterDb.tahunAjaran[parameterDb.tahunAjaran.length-1];
-  renderMenu(); renderFilters(); showPage("dashboard"); if(demoMode) setSync('<i class="fa-solid fa-flask text-amber-600"></i> Mode Demo (data lokal)',"bg-amber-100 text-amber-700");
+  renderMenu(); renderFilters(); showPage("dashboard");
   // Peringatan password default
   if(currentUser.username==="admin") setTimeout(()=>{
     if(confirm("Anda login sebagai admin default. Disarankan segera mengganti password di menu Pengaturan → User. Buka sekarang?")) showPage("pengaturan",{tab:"user"});
@@ -335,7 +316,6 @@ function closeModal(){$("modalOverlay").classList.add("hidden");}
 /* ---------- Foto upload (kompres → Drive) ---------- */
 async function handleFotoInput(inputEl,tipe,cb,maxMB){
   const f=inputEl.files[0]; if(!f)return;
-  if(demoMode){alert("Upload foto membutuhkan backend Google Apps Script yang sudah di-deploy. Mode Demo hanya untuk mencoba fitur non-foto.");inputEl.value="";return;}
   const limit=(maxMB||2)*1024*1024;
   if(f.size>limit){ alert("File terlalu besar ("+(f.size/1048576).toFixed(1)+" MB). Maks "+(maxMB||2)+" MB. Akan dikompresi otomatis."); }
   const reader=new FileReader();
@@ -544,8 +524,6 @@ function simpanSiswa(id){
   if(!o.nama||!o.jk){alert("Nama dan Jenis Kelamin wajib diisi.");return;}
   if(o.nisn&&!/^\d{10}$/.test(o.nisn)){alert("NISN harus 10 digit angka (atau kosongkan).");return;}
   if(o.nik&&!/^\d{16}$/.test(o.nik)){alert("NIK harus 16 digit angka (atau kosongkan).");return;}
-  const dup=studentDb.find(x=>x.id!==id&&((o.nis&&x.nis===o.nis)||(o.nisn&&x.nisn===o.nisn)||(o.nik&&x.nik===o.nik)));
-  if(dup){alert("Data duplikat: NIS/NISN/NIK sudah terdaftar atas nama "+dup.nama+".");return;}
   if(id){Object.assign(studentDb.find(x=>x.id===id),o);}
   else{o.id=uid("std");o.nis=o.nis||("SIS-"+Date.now().toString().slice(-8));o.tahunAjaran=activeFilters.tahunAjaran;studentDb.push(o);}
   closeModal();scheduleSave();renderSiswa();
@@ -826,7 +804,7 @@ function pengIdentitas(){
   $("pengBody").innerHTML=`<div class="bg-white rounded-xl shadow p-5">
     <div class="flex items-start gap-5 mb-4">
       <div class="text-center"><div class="logo-box shadow" id="logoPreview" style="width:90px;height:90px">${sk.logo?`<img src="${esc(sk.logo)}=w180-h180-c" style="max-width:82px;max-height:82px">`:`<span class="text-3xl text-slate-300"><i class="fa-solid fa-image"></i></span>`}</div>
-        <label class="text-xs text-blue-600 cursor-pointer block mt-2">Upload Logo (≤500 KB)<input type="file" accept="image/*" class="hidden" onchange="handleFotoInput(this,'logo',u=>{document.getElementById('sk_logo').value=u;document.getElementById('logoPreview').innerHTML='<img src=\\''+u+'=w180-h180-c\\' style=max-width:82px;max-height:82px>'},0.5)"></label></div>
+        <label class="text-xs text-blue-600 cursor-pointer block mt-2">Upload Logo (≤500 KB)<input type="file" accept="image/*" class="hidden" onchange="handleFotoInput(this,'logo',u=>{document.getElementById('sk_logo').value=u;document.getElementById('logoPreview').innerHTML='<img src=\\''+u+'=w180-h180-c\\' style=max-width:82px;max-height:82px>'})"></label></div>
       <input type="hidden" id="sk_logo" value="${esc(sk.logo||"")}">
       <div class="grid grid-cols-2 gap-3 flex-1">${inp("Nama Aplikasi","namaAplikasi","SI-BIS PRO")}${inp("Nama Sekolah","namaSekolah")}${inp("NPSN","npsn")}${inp("Kepala Sekolah","kepalaSekolah")}${inp("NIP Kepala Sekolah","nipKepalaSekolah")}<div class="col-span-2">${inp("Alamat Sekolah","alamat")}</div></div>
     </div>
@@ -975,12 +953,10 @@ function terimaImport(){
 
 /* ---------- Init ---------- */
 (function init(){
-  if(GAS_URL.indexOf("DEPLOYMENT_ID")>=0){
-    const gh=$("gasHint"); if(gh){gh.classList.remove("hidden");gh.innerHTML='<i class="fa-solid fa-triangle-exclamation mr-1"></i><b>Backend belum dikonfigurasi.</b> Ganti konstanta <code>GAS_URL</code> di file HTML dengan URL hasil deploy, atau klik <b>Mode Demo</b> untuk mencoba sekarang.';}
-  }
   loadPublicProfile();
   const sess=JSON.parse(sessionStorage.getItem("sibis_session")||"null");
   if(sess&&sess.token){currentUser=sess;afterLogin();}
+  document.addEventListener("keydown",e=>{if(e.key==="Enter"&&!$("modalOverlay").classList.contains("hidden")===false&&document.activeElement&&document.activeElement.id==="loginPass")doLogin();});
   $("loginPass").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
   $("loginUser").addEventListener("keydown",e=>{if(e.key==="Enter")$("loginPass").focus();});
 })();
